@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#f59e0b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>FurryHotel - 首页</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- Logo -->
+  <div class="logo-area" style="padding-top:32px;">
+    <span class="logo-icon">🐾</span>
+    <h1 class="logo-title">FurryHotel</h1>
+    <p class="logo-sub">xxx小聚，欢迎参加</p>
+  </div>
+
+  <!-- 用户卡片 -->
+  <div class="dashboard">
+    <div class="user-card">
+      <div class="avatar">🐱</div>
+      <div class="nickname" id="nickname">--</div>
+      <div class="username" id="usernameDisplay">@--</div>
+      <div class="info-row" id="phoneRow" style="display:none;">
+        <span>📱</span><span id="phoneDisplay">--</span>
+      </div>
+      <div class="info-row">
+        <span>🕐</span><span id="createdAt">--</span>
+      </div>
+    </div>
+
+    <!-- 功能入口 -->
+    <div class="menu-grid">
+      <a class="menu-item" href="reserve.html">
+        <span class="menu-icon">🛏️</span>
+        <span class="menu-label">我要预定</span>
+      </a>
+      <a class="menu-item" href="id-verify.html">
+        <span class="menu-icon">📇</span>
+        <span class="menu-label">实名信息</span>
+      </a>
+      <a class="menu-item" href="verify.html">
+        <span class="menu-icon">📋</span>
+        <span class="menu-label">订单记录</span>
+      </a>
+      <a class="menu-item" href="verify.html">
+        <span class="menu-icon">✅</span>
+        <span class="menu-label">在线核验</span>
+      </a>
+      <a class="menu-item" href="javascript:;">
+        <span class="menu-icon">💬</span>
+        <span class="menu-label">在线客服</span>
+      </a>
+    </div>
+
+    <!-- 退出按钮 -->
+    <button class="btn btn-danger" id="logoutBtn" style="margin-top:24px;">
+      退出登录
+    </button>
+  </div>
+
+  <!-- 底部 -->
+  <p style="font-size:12px;color:#a8a29e;margin-bottom:20px;">&copy; 2024 FurryHotel</p>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // ---- 未登录则跳转 ----
+    if (!App.requireAuth()) {
+      // requireAuth 内部会跳转
+    }
+
+    // ---- 加载用户信息 ----
+    async function loadUserInfo() {
+      const localUser = App.getUser();
+      if (localUser) {
+        displayUser(localUser);
+      }
+
+      // 从服务器刷新用户信息
+      try {
+        const res = await api.getMe();
+        if (res.code === 200) {
+          displayUser(res.data);
+          localStorage.setItem('user', JSON.stringify(res.data));
+        }
+      } catch (err) {
+        console.error('获取用户信息失败', err);
+      }
+    }
+
+    function displayUser(user) {
+      document.getElementById('nickname').textContent = user.nickname || user.username;
+      document.getElementById('usernameDisplay').textContent = '@' + user.username;
+
+      if (user.phone) {
+        document.getElementById('phoneRow').style.display = 'flex';
+        document.getElementById('phoneDisplay').textContent = user.phone;
+      }
+
+      if (user.created_at) {
+        document.getElementById('createdAt').textContent =
+          '注册于 ' + user.created_at;
+      }
+    }
+
+    // ---- 退出 ----
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      if (confirm('确定要退出登录吗？')) {
+        App.logout();
+      }
+    });
+
+    // ---- 初始化 ----
+    loadUserInfo();
+  </script>
+</body>
+</html>

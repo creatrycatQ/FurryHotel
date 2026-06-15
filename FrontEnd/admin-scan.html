@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#f59e0b" />
+  <title>FurryHotel - 扫码核验入住</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    .scan-page { width: 100%; max-width: 400px; padding-bottom: 40px; }
+    .scan-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    #scanner-container {
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .manual-input {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .manual-input input {
+      flex: 1;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      font-size: 15px;
+      font-family: var(--font);
+      background: #fafaf9;
+    }
+    .manual-input input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    .manual-input button {
+      padding: 12px 18px;
+      border: none;
+      border-radius: 12px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .manual-input button:active { background: var(--primary-dark); }
+    .result-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      text-align: center;
+      display: none;
+    }
+    .result-card.show { display: block; }
+    .result-card .result-icon { font-size: 48px; margin-bottom: 12px; }
+    .result-card .result-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .result-card .result-detail {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.8;
+      text-align: left;
+      margin-top: 12px;
+      padding: 12px;
+      background: #fefce8;
+      border-radius: 8px;
+    }
+    .result-card .result-detail span { color: var(--text); font-weight: 500; }
+    .result-success .result-title { color: #065f46; }
+    .result-error .result-title { color: #991b1b; }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 14px;
+      color: var(--primary-dark);
+      text-decoration: none;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .scan-tip {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-align: center;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="logo-area" style="padding-top:24px;">
+    <span class="logo-icon">📷</span>
+    <h1 class="logo-title">扫码核验入住</h1>
+    <p class="logo-sub">扫描住客二维码完成入住登记</p>
+  </div>
+
+  <div class="scan-page">
+    <a class="back-link" href="admin.html">← 返回后台</a>
+
+    <div class="scan-card">
+      <div id="scanner-container"></div>
+      <p class="scan-tip">将摄像头对准住客手机上的二维码</p>
+    </div>
+
+    <div class="scan-card">
+      <p style="font-size:14px;font-weight:600;margin-bottom:10px;">手动输入订单号</p>
+      <div class="manual-input">
+        <input type="number" id="manualOrderId" placeholder="输入订单ID" />
+        <button id="manualBtn" onclick="manualCheckin()">核验</button>
+      </div>
+    </div>
+
+    <div class="result-card" id="resultCard">
+      <div class="result-icon" id="resultIcon"></div>
+      <div class="result-title" id="resultTitle"></div>
+      <div class="result-detail" id="resultDetail"></div>
+      <button class="btn" style="margin-top:16px;" onclick="resetScan()">继续扫码</button>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // Check admin auth
+    if (!App.requireAuth()) { /* redirect */ }
+
+    let html5Scanner = null;
+
+    // Initialize scanner
+    function initScanner() {
+      html5Scanner = new Html5Qrcode('scanner-container');
+      html5Scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        onScanSuccess,
+        () => {} // ignore scan errors
+      ).catch(err => {
+        document.getElementById('scanner-container').innerHTML =
+          '<p style="padding:40px;text-align:center;color:var(--text-secondary);">📷 无法访问摄像头<br/><span style="font-size:12px;">请使用手动输入订单号方式</span></p>';
+      });
+    }
+
+    async function onScanSuccess(decodedText) {
+      // Pause scanner
+      if (html5Scanner) {
+        html5Scanner.pause(true);
+      }
+
+      let orderId = null;
+      try {
+        const data = JSON.parse(decodedText);
+        if (data.type === 'furry_checkin' && data.order_id) {
+          orderId = data.order_id;
+        }
+      } catch {
+        // Maybe it's just a plain number
+        const num = parseInt(decodedText, 10);
+        if (!isNaN(num)) orderId = num;
+      }
+
+      if (!orderId) {
+        showResult(false, '无效二维码', '无法识别该二维码内容，请确认是 FurryHotel 订单二维码');
+        return;
+      }
+
+      await doCheckin(orderId);
+    }
+
+    async function manualCheckin() {
+      const input = document.getElementById('manualOrderId');
+      const orderId = parseInt(input.value, 10);
+      if (!orderId || orderId <= 0) {
+        App.toast('请输入有效订单号', 'error');
+        return;
+      }
+      await doCheckin(orderId);
+    }
+
+    async function doCheckin(orderId) {
+      try {
+        const res = await api.adminCheckin(orderId);
+        if (res.code === 200) {
+          const d = res.data;
+          showResult(true, '核验入住成功', `
+            👤 入住人：<span>${d.guest_name}</span><br/>
+            🏨 房间：<span>${d.room_number}</span><br/>
+            📅 入住：<span>${d.check_in_date}</span><br/>
+            📅 离店：<span>${d.check_out_date}</span>
+          `);
+        } else {
+          showResult(false, '核验失败', res.message || '未知错误');
+        }
+      } catch (err) {
+        showResult(false, '网络错误', '请检查网络连接后重试');
+        console.error(err);
+      }
+    }
+
+    function showResult(success, title, detail) {
+      const card = document.getElementById('resultCard');
+      const icon = document.getElementById('resultIcon');
+      const titleEl = document.getElementById('resultTitle');
+      const detailEl = document.getElementById('resultDetail');
+
+      card.className = `result-card show ${success ? 'result-success' : 'result-error'}`;
+      icon.textContent = success ? '✅' : '❌';
+      titleEl.textContent = title;
+      detailEl.innerHTML = detail;
+    }
+
+    function resetScan() {
+      document.getElementById('resultCard').className = 'result-card';
+      if (html5Scanner) {
+        try { html5Scanner.resume(); } catch {}
+      }
+    }
+
+    // Start on page load
+    initScanner();
+  </script>
+</body>
+</html>

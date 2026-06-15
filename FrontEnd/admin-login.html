@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>管理后台登录 - FurryHotel</title>
+  <link rel="stylesheet" href="css/admin-login.css" />
+</head>
+<body>
+
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-header">
+        <span class="logo">🐾</span>
+        <h1>酒店管理后台</h1>
+        <p>FurryHotel Admin</p>
+      </div>
+
+      <form id="loginForm" autocomplete="off">
+        <div class="form-group">
+          <label for="username">管理员账号</label>
+          <div class="input-wrap">
+            <span class="input-icon">👤</span>
+            <input type="text" id="username" placeholder="请输入管理员账号" autocomplete="off" maxlength="20" required />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password">密码</label>
+          <div class="input-wrap">
+            <span class="input-icon">🔒</span>
+            <input type="password" id="password" placeholder="请输入密码" autocomplete="off" maxlength="30" required />
+            <span class="toggle-pwd" id="togglePwd">👁️</span>
+          </div>
+        </div>
+
+        <p class="error-msg" id="errorMsg"></p>
+
+        <button type="submit" class="btn-login" id="loginBtn">登 录</button>
+      </form>
+
+      <p class="footer-text">&copy; 2024 FurryHotel 管理后台</p>
+    </div>
+  </div>
+
+  <script>
+    var API = 'http://localhost:3000/api';
+
+    // 密码显隐
+    document.getElementById('togglePwd').addEventListener('click', function() {
+      var pwd = document.getElementById('password');
+      var isPwd = pwd.type === 'password';
+      pwd.type = isPwd ? 'text' : 'password';
+      this.textContent = isPwd ? '🙈' : '👁️';
+    });
+
+    // 登录
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      var username = document.getElementById('username').value.trim();
+      var password = document.getElementById('password').value;
+      var btn = document.getElementById('loginBtn');
+      var err = document.getElementById('errorMsg');
+
+      if (!username || !password) {
+        err.textContent = '请输入账号和密码';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '登录中...';
+      err.textContent = '';
+
+      try {
+        var res = await fetch(API + '/auth/admin-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username, password: password })
+        });
+        var data = await res.json();
+
+        if (data.code === 200) {
+          localStorage.setItem('admin_token', data.data.token);
+          localStorage.setItem('admin_user', JSON.stringify(data.data.user));
+          location.href = 'admin.html';
+        } else {
+          err.textContent = data.message || '登录失败';
+        }
+      } catch (ex) {
+        err.textContent = '网络错误，请检查服务是否启动';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '登 录';
+      }
+    });
+  </script>
+</body>
+</html>

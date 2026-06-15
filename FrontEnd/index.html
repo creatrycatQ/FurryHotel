@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#f59e0b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>FurryHotel - 登录</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- Logo -->
+  <div class="logo-area">
+    <span class="logo-icon">🐾</span>
+    <h1 class="logo-title">FurryHotel</h1>
+    <p class="logo-sub">xxx小聚，欢迎参加</p>
+  </div>
+
+  <!-- 登录卡片 -->
+  <div class="card">
+    <h2>欢迎回来 👋</h2>
+    <p class="subtitle">登录您的 FurryHotel 账户</p>
+
+    <form id="loginForm" autocomplete="off">
+      <!-- 用户名 -->
+      <div class="form-group">
+        <label for="username">用户名</label>
+        <div class="input-wrapper">
+          <span class="input-icon">👤</span>
+          <input
+            type="text"
+            id="username"
+            placeholder="请输入用户名"
+            autocomplete="username"
+            maxlength="20"
+            required
+          />
+        </div>
+      </div>
+
+      <!-- 密码 -->
+      <div class="form-group">
+        <label for="password">密码</label>
+        <div class="input-wrapper">
+          <span class="input-icon">🔒</span>
+          <input
+            type="password"
+            id="password"
+            placeholder="请输入密码"
+            autocomplete="current-password"
+            maxlength="30"
+            required
+          />
+          <span class="toggle-pwd" id="togglePwd" title="显示密码">👁️</span>
+        </div>
+      </div>
+
+      <!-- 登录按钮 -->
+      <button type="submit" class="btn btn-primary" id="loginBtn">登 录</button>
+    </form>
+
+    <!-- 跳转注册 -->
+    <div class="form-footer">
+      还没有账号？<a href="register.html">立即注册 →</a>
+    </div>
+  </div>
+
+  <!-- 底部 -->
+  <p style="font-size:12px;color:#a8a29e;margin-bottom:20px;">&copy; 2024 FurryHotel</p>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // ---- 已登录则跳转 ----
+    App.checkLoggedIn();
+
+    // ---- 密码显隐切换 ----
+    const pwdInput = document.getElementById('password');
+    const togglePwd = document.getElementById('togglePwd');
+    togglePwd.addEventListener('click', () => {
+      const isPassword = pwdInput.type === 'password';
+      pwdInput.type = isPassword ? 'text' : 'password';
+      togglePwd.textContent = isPassword ? '🙈' : '👁️';
+    });
+
+    // ---- 表单提交 ----
+    const form = document.getElementById('loginForm');
+    const loginBtn = document.getElementById('loginBtn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!username || !password) {
+        App.toast('请输入用户名和密码', 'error');
+        return;
+      }
+
+      App.setBtnLoading(loginBtn, true);
+
+      try {
+        const res = await api.login({ username, password });
+
+        if (res.code === 200) {
+          App.saveLogin(res.data.token, res.data.user);
+          App.toast('登录成功！欢迎回来 🐾', 'success');
+          setTimeout(() => {
+            window.location.href = 'home.html';
+          }, 800);
+        } else {
+          App.toast(res.message || '登录失败', 'error');
+        }
+      } catch (err) {
+        App.toast('网络错误，请检查后端服务是否启动', 'error');
+        console.error(err);
+      } finally {
+        App.setBtnLoading(loginBtn, false);
+      }
+    });
+  </script>
+</body>
+</html>
