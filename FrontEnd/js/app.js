@@ -196,7 +196,8 @@ const App = {
    */
   statusMap: {
     pending: '待审批',
-    confirmed: '待入住',
+    approved: '待入住',
+    confirmed: '已核验',
     checked_in: '已入住',
     completed: '已完成',
     cancelled: '已取消',

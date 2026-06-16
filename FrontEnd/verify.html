@@ -34,7 +34,8 @@
       font-weight: 600;
     }
     .status-pending { background: #fef3c7; color: #92400e; }
-    .status-confirmed { background: #d1fae5; color: #065f46; }
+    .status-approved { background: #d1fae5; color: #065f46; }
+    .status-confirmed { background: #dbeafe; color: #1e40af; }
     .status-checked_in { background: #dbeafe; color: #1e40af; }
     .status-completed { background: #e0e7ff; color: #3730a3; }
     .status-cancelled { background: #fee2e2; color: #991b1b; }
@@ -128,13 +129,13 @@
               👤 入住人：<span>${esc(order.guest_name)}</span><br/>
               🏨 房间：<span>${esc(order.room_number || '待分配')} ${esc(order.room_type_label || order.room_type || '')}</span>
             </div>
-            ${(order.status === 'pending' || order.status === 'confirmed') ? '<div class="qr-area"><canvas id="qr-' + order.id + '"></canvas><div class="qr-hint">请让前台扫描此二维码完成入住</div></div>' : ''}
-            ${order.status === 'checked_in' ? '<div class="qr-area" style="background:#d1fae5;"><div class="qr-hint" style="color:#065f46;font-weight:600;">✅ 已完成核验入住</div></div>' : ''}
+            ${(order.status === 'pending' || order.status === 'approved') ? '<div class="qr-area"><canvas id="qr-' + order.id + '"></canvas><div class="qr-hint">请让前台扫描此二维码完成入住</div></div>' : ''}
+            ${(order.status === 'confirmed' || order.status === 'checked_in') ? '<div class="qr-area" style="background:#d1fae5;"><div class="qr-hint" style="color:#065f46;font-weight:600;">✅ 已完成核验入住</div></div>' : ''}
           `;
           container.appendChild(card);
 
           // Generate QR code for active orders
-          if (order.status === 'pending' || order.status === 'confirmed') {
+          if (order.status === 'pending' || order.status === 'approved') {
             const qrData = JSON.stringify({ type: 'furry_checkin', order_id: order.id });
             QRCode.toCanvas(document.getElementById(`qr-${order.id}`), qrData, {
               width: 180,

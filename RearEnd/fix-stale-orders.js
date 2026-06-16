@@ -10,7 +10,7 @@ try {
     SELECT o.id, o.room_id, o.status as order_status, r.room_number
     FROM orders o
     JOIN rooms r ON o.room_id = r.id
-    WHERE r.status = 'available' AND o.status IN ('confirmed', 'checked_in', 'pending')
+    WHERE r.status = 'available' AND o.status IN ('approved', 'confirmed', 'checked_in', 'pending')
   `).all();
 
   if (!staleOrders.length) {

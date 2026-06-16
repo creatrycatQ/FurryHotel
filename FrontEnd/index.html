@@ -79,6 +79,18 @@
     // ---- 已登录则跳转 ----
     App.checkLoggedIn();
 
+    // ---- 检查注册模式，关闭时隐藏注册链接 ----
+    (async function() {
+      try {
+        var resp = await fetch(location.origin + '/api/settings/registration-mode');
+        var data = await resp.json();
+        if (data.code === 200 && data.data && data.data.mode === 'closed') {
+          var footer = document.querySelector('.form-footer');
+          if (footer) footer.style.display = 'none';
+        }
+      } catch(e) {}
+    })();
+
     // ---- 密码显隐切换 ----
     const pwdInput = document.getElementById('password');
     const togglePwd = document.getElementById('togglePwd');

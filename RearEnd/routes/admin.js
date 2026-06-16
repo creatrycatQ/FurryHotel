@@ -20,6 +20,8 @@ const {
   getAllDeposits, getDepositById, getDepositByOrderId, createDeposit, refundDeposit, forfeitDeposit, deleteDepositByOrderId,
   getRoomTypeByName,
   getSystemSetting, setSystemSetting, getAllSettings,
+  createInviteCode, getInviteCodes, updateInviteCodeStatus, deleteInviteCode,
+  getPendingUsers, approveUser, rejectUser,
   db,
 } = require('../database');
 
@@ -102,7 +104,7 @@ router.put('/rooms/:id', authMiddleware, (req, res) => {
   // 退房：将房间设为 available 时，同步完成关联订单并退还押金
   if (status === 'available') {
     const activeOrders = db.prepare(
-      `SELECT id FROM orders WHERE room_id = ? AND status IN ('confirmed', 'checked_in', 'pending')`
+      `SELECT id FROM orders WHERE room_id = ? AND status IN ('confirmed', 'checked_in', 'pending', 'approved')`
     ).all(req.params.id);
 
     for (const order of activeOrders) {
@@ -201,11 +203,13 @@ router.put('/orders/:id', authMiddleware, (req, res) => {
       } else if (status === 'cancelled' || status === 'completed') {
         // 检查该房间是否还有其他活跃订单
         const activeOrders = db.prepare(
-          `SELECT id FROM orders WHERE room_id = ? AND id != ? AND status IN ('pending', 'confirmed')`
+          `SELECT id FROM orders WHERE room_id = ? AND id != ? AND status IN ('pending', 'approved', 'confirmed')`
         ).all(order.room_id, order.id);
         if (activeOrders.length === 0) {
           updateRoom(order.room_id, { status: 'available' });
         }
+      } else if (status === 'approved') {
+        updateRoom(order.room_id, { status: 'reserved' });
       } else if (status === 'pending') {
         updateRoom(order.room_id, { status: 'reserved' });
       }
@@ -222,9 +226,9 @@ router.delete('/orders/:id', authMiddleware, (req, res) => {
   // 事务：释放房间 + 删除关联核验记录 + 删除押金 + 删除订单
   const deleteTransaction = db.transaction(() => {
     // 如果订单关联房间且处于活跃状态，释放房间
-    if (order.room_id && (order.status === 'pending' || order.status === 'confirmed')) {
+    if (order.room_id && (order.status === 'pending' || order.status === 'confirmed' || order.status === 'approved')) {
       const activeOrders = db.prepare(
-        `SELECT id FROM orders WHERE room_id = ? AND id != ? AND status IN ('pending', 'confirmed')`
+        `SELECT id FROM orders WHERE room_id = ? AND id != ? AND status IN ('pending', 'approved', 'confirmed')`
       ).all(order.room_id, order.id);
       if (activeOrders.length === 0) {
         updateRoom(order.room_id, { status: 'available' });
@@ -249,6 +253,11 @@ router.post('/verify', authMiddleware, (req, res) => {
 
   const order = getOrderById(order_id);
   if (!order) return res.status(404).json({ code: 404, message: '订单不存在' });
+
+  // 仅允许 approved 或 pending 状态的订单进行核验
+  if (order.status === 'confirmed' || order.status === 'completed' || order.status === 'checked_in') {
+    return res.status(400).json({ code: 400, message: '该订单已核验，无需重复操作' });
+  }
 
   verifyOrder({ order_id, verified_by: req.user.id, result: result || 'success', note: note || '' });
 
@@ -344,9 +353,9 @@ router.delete('/users/:id', authMiddleware, (req, res) => {
     // 释放该用户活跃订单关联的房间，删除核验记录和订单
     const userOrders = db.prepare('SELECT id, room_id, status FROM orders WHERE user_id = ?').all(req.params.id);
     for (const order of userOrders) {
-      if (order.room_id && (order.status === 'pending' || order.status === 'confirmed')) {
+      if (order.room_id && (order.status === 'pending' || order.status === 'confirmed' || order.status === 'approved')) {
         const otherActive = db.prepare(
-          `SELECT id FROM orders WHERE room_id = ? AND id != ? AND status IN ('pending', 'confirmed')`
+          `SELECT id FROM orders WHERE room_id = ? AND id != ? AND status IN ('pending', 'approved', 'confirmed')`
         ).all(order.room_id, order.id);
         if (otherActive.length === 0) {
           updateRoom(order.room_id, { status: 'available' });
@@ -454,7 +463,7 @@ router.get('/settings', authMiddleware, (req, res) => {
 });
 
 router.put('/settings', authMiddleware, (req, res) => {
-  const { booking_open, session_timeout_minutes, site_title, site_subtitle, copyright_text } = req.body;
+  const { booking_open, session_timeout_minutes, site_title, site_subtitle, copyright_text, registration_mode } = req.body;
   if (booking_open !== undefined) {
     setSystemSetting('booking_open', booking_open ? '1' : '0');
   }
@@ -474,7 +483,82 @@ router.put('/settings', authMiddleware, (req, res) => {
   if (copyright_text !== undefined) {
     setSystemSetting('copyright_text', String(copyright_text).trim() || '© 2024 FurryHotel');
   }
+  if (registration_mode !== undefined) {
+    const validModes = ['open', 'closed', 'review', 'invite'];
+    if (!validModes.includes(registration_mode)) {
+      return res.status(400).json({ code: 400, message: '无效的注册模式' });
+    }
+    setSystemSetting('registration_mode', registration_mode);
+  }
   res.json({ code: 200, message: '设置已更新' });
+});
+
+// ========== 邀请码管理 ==========
+
+router.get('/invite-codes', authMiddleware, (req, res) => {
+  const codes = getInviteCodes();
+  res.json({ code: 200, data: codes });
+});
+
+router.post('/invite-codes', authMiddleware, (req, res) => {
+  const crypto = require('crypto');
+  const { count = 1, max_uses = 1, expires_hours } = req.body;
+  const num = Math.min(Math.max(parseInt(count) || 1, 1), 50);
+  const maxUses = Math.max(parseInt(max_uses) || 1, 1);
+  const expiresAt = expires_hours ? new Date(Date.now() + parseInt(expires_hours) * 3600000).toISOString().replace('T', ' ').slice(0, 19) : null;
+
+  const created = [];
+  for (let i = 0; i < num; i++) {
+    const code = crypto.randomBytes(6).toString('hex').toUpperCase();
+    try {
+      createInviteCode({ code, created_by: req.user.id, max_uses: maxUses, expires_at: expiresAt });
+      created.push(code);
+    } catch (e) {
+      // 极低概率重复，跳过
+    }
+  }
+  res.json({ code: 201, message: `已生成 ${created.length} 个邀请码`, data: created });
+});
+
+router.put('/invite-codes/:id', authMiddleware, (req, res) => {
+  const { status } = req.body;
+  if (!['active', 'disabled'].includes(status)) {
+    return res.status(400).json({ code: 400, message: '状态值无效' });
+  }
+  updateInviteCodeStatus(req.params.id, status);
+  res.json({ code: 200, message: '邀请码状态已更新' });
+});
+
+router.delete('/invite-codes/:id', authMiddleware, (req, res) => {
+  deleteInviteCode(req.params.id);
+  res.json({ code: 200, message: '邀请码已删除' });
+});
+
+// ========== 用户审核 ==========
+
+router.get('/pending-users', authMiddleware, (req, res) => {
+  const users = getPendingUsers();
+  res.json({ code: 200, data: users });
+});
+
+router.post('/users/:id/approve', authMiddleware, (req, res) => {
+  const user = findUserById(req.params.id);
+  if (!user) return res.status(404).json({ code: 404, message: '用户不存在' });
+  if (user.status !== 'pending') {
+    return res.status(400).json({ code: 400, message: '该用户不在待审核状态' });
+  }
+  approveUser(req.params.id);
+  res.json({ code: 200, message: '用户已通过审核' });
+});
+
+router.post('/users/:id/reject', authMiddleware, (req, res) => {
+  const user = findUserById(req.params.id);
+  if (!user) return res.status(404).json({ code: 404, message: '用户不存在' });
+  if (user.status !== 'pending') {
+    return res.status(400).json({ code: 400, message: '该用户不在待审核状态' });
+  }
+  rejectUser(req.params.id);
+  res.json({ code: 200, message: '用户已被拒绝并删除' });
 });
 
 // ========== 订单审批 ==========
@@ -522,7 +606,7 @@ router.post('/orders/:id/approve', authMiddleware, (req, res) => {
   const updateFields = {
     room_id: targetRoom.id,
     total_price: targetRoom.price,
-    status: 'confirmed'
+    status: 'approved'
   };
   if (note) updateFields.remark = note;
 

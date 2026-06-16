@@ -19,6 +19,7 @@ const adminRoutes = require('./routes/admin');
 const userRoutes = require('./routes/user');
 
 const app = express();
+app.set('trust proxy', 1); // 信任一层代理（Cloudflare Tunnel）
 const PORT = process.env.PORT || 3000;
 
 // ---------- 中间件 ----------
@@ -163,6 +164,18 @@ app.get('/api/settings/site-info', (req, res) => {
     res.json({ code: 200, data: { site_title, site_subtitle, copyright_text } });
   } catch (err) {
     console.error('获取网站信息失败:', err);
+    res.status(500).json({ code: 500, message: '服务器内部错误' });
+  }
+});
+
+// 公开接口：获取注册模式（无需登录）
+app.get('/api/settings/registration-mode', (req, res) => {
+  try {
+    const { getSystemSetting } = require('./database');
+    const mode = getSystemSetting('registration_mode') || 'open';
+    res.json({ code: 200, data: { mode } });
+  } catch (err) {
+    console.error('获取注册模式失败:', err);
     res.status(500).json({ code: 500, message: '服务器内部错误' });
   }
 });

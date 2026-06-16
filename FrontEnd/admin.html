@@ -62,6 +62,9 @@
       <a class="nav-item" data-tab="users" href="javascript:;">
         <span class="nav-icon">👤</span><span class="nav-text">账号管理</span>
       </a>
+      <a class="nav-item" data-tab="inviteCodes" href="javascript:;">
+        <span class="nav-icon">🎟️</span><span class="nav-text">邀请码</span>
+      </a>
       <a class="nav-item" data-tab="settings" href="javascript:;">
         <span class="nav-icon">⚙️</span><span class="nav-text">系统设置</span>
       </a>
@@ -119,7 +122,8 @@
       <div class="order-filter-tabs" id="orderFilterTabs">
         <button class="filter-tab active" data-status="all" onclick="Admin.filterOrders('all')">全部</button>
         <button class="filter-tab" data-status="pending" onclick="Admin.filterOrders('pending')">待审批 <span class="filter-badge" id="pendingBadge"></span></button>
-        <button class="filter-tab" data-status="confirmed" onclick="Admin.filterOrders('confirmed')">已通过</button>
+        <button class="filter-tab" data-status="approved" onclick="Admin.filterOrders('approved')">已通过</button>
+        <button class="filter-tab" data-status="confirmed" onclick="Admin.filterOrders('confirmed')">已核验</button>
         <button class="filter-tab" data-status="checked_in" onclick="Admin.filterOrders('checked_in')">已入住</button>
         <button class="filter-tab" data-status="completed" onclick="Admin.filterOrders('completed')">已完成</button>
         <button class="filter-tab" data-status="cancelled" onclick="Admin.filterOrders('cancelled')">已取消</button>
@@ -169,9 +173,24 @@
         <h1 class="page-title">👤 账号管理</h1>
         <button class="btn btn-primary" onclick="showAddUserModal()">+ 添加账号</button>
       </div>
+      <div id="pendingUsersBar" class="pending-users-bar" style="display:none;margin-bottom:16px;padding:12px 16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;display:flex;align-items:center;gap:12px">
+        <span>⏳ 有 <strong id="pendingUsersCount">0</strong> 个用户等待审核</span>
+        <button class="btn btn-sm btn-primary" onclick="Admin.showPendingUsers()">查看并审核</button>
+      </div>
       <table class="data-table">
-        <thead><tr><th>ID</th><th>用户名</th><th>昵称</th><th>手机</th><th>角色</th><th>注册时间</th><th>操作</th></tr></thead>
+        <thead><tr><th>ID</th><th>用户名</th><th>昵称</th><th>手机</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
         <tbody id="userTableBody"></tbody>
+      </table>
+    </section>
+
+    <section class="tab-content hidden" id="tab-inviteCodes">
+      <div class="tab-header">
+        <h1 class="page-title">🎟️ 邀请码管理</h1>
+        <button class="btn btn-primary" onclick="Admin.showGenerateInviteModal()">+ 生成邀请码</button>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>邀请码</th><th>已用/上限</th><th>状态</th><th>过期时间</th><th>创建时间</th><th>操作</th></tr></thead>
+        <tbody id="inviteCodeTableBody"></tbody>
       </table>
     </section>
 
@@ -208,6 +227,25 @@
           <div class="setting-control" style="display:flex;align-items:center;gap:8px">
             <input type="number" id="settingSessionTimeout" min="5" max="10080" value="480" style="width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px" />
             <button class="btn btn-sm btn-primary" onclick="Admin.saveSessionTimeout()">保存</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-card" style="margin-top:20px">
+        <h3 style="margin:0 0 16px;font-size:16px;font-weight:600">注册控制</h3>
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">注册模式</div>
+            <div class="setting-desc">控制新用户的注册方式：开放（任何人）、关闭（禁止）、审核（需管理员通过）、邀请码（需有效邀请码）</div>
+          </div>
+          <div class="setting-control" style="display:flex;align-items:center;gap:8px">
+            <select id="settingRegistrationMode" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px">
+              <option value="open">开放注册</option>
+              <option value="closed">关闭注册</option>
+              <option value="review">审核注册</option>
+              <option value="invite">邀请码注册</option>
+            </select>
+            <button class="btn btn-sm btn-primary" onclick="Admin.saveRegistrationMode()">保存</button>
           </div>
         </div>
       </div>
@@ -310,6 +348,31 @@
       <div class="modal-actions">
         <button class="btn btn-primary" onclick="Admin.createUser()">创建</button>
         <button class="btn btn-outline" onclick="Admin.closeModal('addUserModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 生成邀请码弹窗 -->
+  <div class="modal-overlay hidden" id="generateInviteModalOverlay">
+    <div class="modal-box">
+      <h3>生成邀请码</h3>
+      <div class="form-group"><label>生成数量</label><input type="number" id="inviteCount" value="1" min="1" max="50" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px" /></div>
+      <div class="form-group"><label>每码使用次数上限</label><input type="number" id="inviteMaxUses" value="1" min="1" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px" /></div>
+      <div class="form-group"><label>有效期（小时，留空则永不过期）</label><input type="number" id="inviteExpiresHours" placeholder="如 72 表示3天" min="1" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px" /></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="Admin.generateInviteCodes()">生成</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('generateInviteModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 待审核用户弹窗 -->
+  <div class="modal-overlay hidden" id="pendingUsersModalOverlay">
+    <div class="modal-box" style="max-width:600px">
+      <h3>待审核用户</h3>
+      <div id="pendingUsersList" style="max-height:400px;overflow-y:auto"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="Admin.closeModal('pendingUsersModalOverlay')">关闭</button>
       </div>
     </div>
   </div>

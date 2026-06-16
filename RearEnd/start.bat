@@ -59,5 +59,20 @@ exit /b 0
 :LAUNCH
 echo [INFO] Starting server...
 echo.
+
+:: ---------- Launch cloudflared tunnel ----------
+echo [INFO] Starting cloudflared tunnel...
+cd /d "%~dp0.."
+start /b "" cloudflared.exe tunnel --config .\config.yml run --protocol http2
+cd /d "%~dp0"
+echo [INFO] Cloudflared tunnel started.
+echo.
+
 node server.js
+
+:: ---------- Cleanup: kill cloudflared on exit ----------
+echo.
+echo [INFO] Shutting down cloudflared...
+taskkill /F /IM cloudflared.exe >nul 2>&1
+echo [INFO] Done.
 pause

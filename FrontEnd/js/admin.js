@@ -3,7 +3,7 @@ var RM={};
 var editingRoomId=null,editingGuestId=null,editingOrderId=null;
 var RS={available:'可入住',occupied:'已入住',cleaning:'清洁中',maintenance:'维护中',reserved:'已预定'};
 var GS={checked_in:'已入住',checked_out:'已退房'};
-var OS={pending:'待审批',confirmed:'已通过',cancelled:'已取消',completed:'已完成',checked_in:'已入住'};
+var OrderStatus={pending:'待审批',approved:'待核验',confirmed:'已核验',cancelled:'已取消',completed:'已完成',checked_in:'已入住'};
 var DS={collected:'已收取',refunded:'已退还',forfeited:'已扣除'};
 var currentOrderFilter='all';
 var allOrdersCache=[];
@@ -94,6 +94,7 @@ function switchView(view){
  else if(view==='orders')loadOrders();
  else if(view==='deposit')loadDeposits();
  else if(view==='users')loadUsers();
+ else if(view==='inviteCodes')loadInviteCodes();
  else if(view==='settings')loadSettings();
 }
 
@@ -380,10 +381,10 @@ function renderFilteredOrders(){
   '<td>'+esc(o.id)+'</td><td>'+esc(o.guest_name)+'</td><td>'+esc(o.guest_phone||'-')+'</td>'+
   '<td>'+esc(o.room_number||'-')+'</td>'+
   '<td>¥'+esc(o.total_price)+'</td>'+
-  '<td><span class="status-tag status-'+esc(o.status)+'">'+esc(OS[o.status])+'</span></td>'+
+  '<td><span class="status-tag status-'+esc(o.status)+'">'+esc(OrderStatus[o.status] || o.status)+'</span></td>'+
   '<td>'+
    (o.status==='pending'?'<button class="btn btn-sm btn-success" onclick="Admin.openApproveModal('+o.id+')">审批</button> ':'')+
-   ((o.status==='confirmed'||o.status==='checked_in')&&!o.deposit_id?'<button class="btn btn-sm btn-warning" onclick="Admin.showCollectDeposit('+o.id+',\'#'+esc(o.id)+' '+esc(o.guest_name)+'\')">收押金</button> ':'')+
+   ((o.status==='approved'||o.status==='confirmed'||o.status==='checked_in')&&!o.deposit_id?'<button class="btn btn-sm btn-warning" onclick="Admin.showCollectDeposit('+o.id+',\'#'+esc(o.id)+' '+esc(o.guest_name)+'\')">收押金</button> ':'')+
    '<button class="btn btn-sm btn-primary" onclick="Admin.editOrder('+o.id+')">编辑</button> '+
    '<button class="btn btn-sm btn-danger" onclick="Admin.deleteOrder('+o.id+')">删除</button>'+
   '</td></tr>'
@@ -708,7 +709,7 @@ async function doVerifyById(orderId) {
       '<p><strong>订单 #' + o.id + '</strong></p>' +
       '<p>客人: ' + o.guest_name + ' | 房间: ' + (o.room_number || '-') + '</p>' +
       '<p>金额: ¥' + o.total_price + '</p>' +
-      '<p>状态:  <span class="status-tag status-' + o.status + '">' + OS[o.status] + '</span></p>' +
+      '<p>状态:  <span class="status-tag status-' + o.status + '">' + (OrderStatus[o.status] || o.status) + '</span></p>' +
     '</div>' +
     (o.status === 'confirmed' || o.status === 'completed'
       ? '<div class="verify-done">\u2713 该订单已核验</div>'
@@ -879,12 +880,29 @@ async function loadUsers(){
  var tb=document.getElementById('userTableBody');
  if(r.code!==200)return;
  var roleMap={admin:'管理员',guest:'普通用户'};
- tb.innerHTML=r.data.map(function(u){return '<tr>'+
-  '<td>'+esc(u.id)+'</td><td>'+esc(u.username)+'</td><td>'+esc(u.nickname)+'</td><td>'+esc(u.phone||'-')+'</td>'+
-  '<td>'+esc(roleMap[u.role])+'</td><td>'+esc(u.created_at)+'</td>'+
-  '<td><button class="btn btn-sm btn-primary" onclick="Admin.showPasswordModal('+u.id+',this)\" data-username=\"'+esc(u.username)+'\">修改密码</button> '+
-   '<button class="btn btn-sm btn-danger" onclick="Admin.deleteUser('+u.id+',this)" data-username="'+esc(u.username)+'">删除</button></td>'+
-  '</tr>'}).join('')
+ var statusMap={active:'正常',pending:'待审核'};
+ var pendingCount=0;
+ tb.innerHTML=r.data.map(function(u){
+  var st=u.status||'active';
+  if(st==='pending') pendingCount++;
+  var statusClass=st==='pending'?' style="color:#e67e22;font-weight:600"':'';
+  var actions='<button class="btn btn-sm btn-primary" onclick="Admin.showPasswordModal('+u.id+',this)" data-username="'+esc(u.username)+'">修改密码</button> ';
+  if(st==='pending'){
+   actions+='<button class="btn btn-sm btn-primary" onclick="Admin.approveUser('+u.id+')">通过</button> ';
+   actions+='<button class="btn btn-sm btn-danger" onclick="Admin.rejectUser('+u.id+',\''+esc(u.username)+'\')">拒绝</button> ';
+  }
+  actions+='<button class="btn btn-sm btn-danger" onclick="Admin.deleteUser('+u.id+',this)" data-username="'+esc(u.username)+'">删除</button>';
+  return '<tr>'+
+   '<td>'+esc(u.id)+'</td><td>'+esc(u.username)+'</td><td>'+esc(u.nickname)+'</td><td>'+esc(u.phone||'-')+'</td>'+
+   '<td>'+esc(roleMap[u.role]||u.role)+'</td><td'+statusClass+'>'+esc(statusMap[st]||st)+'</td><td>'+esc(u.created_at)+'</td>'+
+   '<td>'+actions+'</td></tr>'
+ }).join('');
+ // 待审核提示栏
+ var bar=document.getElementById('pendingUsersBar');
+ if(bar){
+  if(pendingCount>0){bar.style.display='flex';document.getElementById('pendingUsersCount').textContent=pendingCount}
+  else{bar.style.display='none'}
+ }
 }
 
 window.Admin.showPasswordModal=function(id,btn){
@@ -948,6 +966,8 @@ async function loadSettings(){
  document.getElementById('settingBookingOpen').checked=(data.booking_open==='1');
  var timeoutInput=document.getElementById('settingSessionTimeout');
  if(timeoutInput) timeoutInput.value=data.session_timeout_minutes||'480';
+ var modeSelect=document.getElementById('settingRegistrationMode');
+ if(modeSelect) modeSelect.value=data.registration_mode||'open';
  var titleInput=document.getElementById('settingSiteTitle');
  if(titleInput) titleInput.value=data.site_title||'';
  var subtitleInput=document.getElementById('settingSiteSubtitle');
@@ -977,6 +997,108 @@ window.Admin.saveSiteInfo=async function(){
  var copyright_text=document.getElementById('settingCopyrightText').value.trim();
  var r=await api('/settings','PUT',{site_title:site_title,site_subtitle:site_subtitle,copyright_text:copyright_text});
  if(r.code===200){toast('网站信息已保存','success')}
+ else{toast(r.message,'error')}
+};
+
+// ===== 注册模式 =====
+window.Admin.saveRegistrationMode=async function(){
+ var mode=document.getElementById('settingRegistrationMode').value;
+ var r=await api('/settings','PUT',{registration_mode:mode});
+ if(r.code===200){toast('注册模式已更新','success')}
+ else{toast(r.message,'error')}
+};
+
+// ===== 用户审核 =====
+window.Admin.approveUser=async function(id){
+ if(!confirm('确定通过该用户的注册申请？'))return;
+ var r=await api('/users/'+id+'/approve','POST');
+ if(r.code===200){loadUsers();toast('用户已通过审核','success')}
+ else{toast(r.message,'error')}
+};
+
+window.Admin.rejectUser=async function(id,username){
+ if(!confirm('确定拒绝并删除用户 "'+(username||'')+'" 的注册申请？'))return;
+ var r=await api('/users/'+id+'/reject','POST');
+ if(r.code===200){loadUsers();toast('用户已被拒绝','success')}
+ else{toast(r.message,'error')}
+};
+
+window.Admin.showPendingUsers=async function(){
+ var r=await api('/pending-users');
+ var list=document.getElementById('pendingUsersList');
+ if(r.code!==200){toast(r.message,'error');return}
+ if(!r.data||r.data.length===0){list.innerHTML='<p style="text-align:center;color:#666;padding:20px">暂无待审核用户</p>';document.getElementById('pendingUsersModalOverlay').classList.remove('hidden');return}
+ list.innerHTML=r.data.map(function(u){
+  return '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border-bottom:1px solid #eee">'+
+   '<div><strong>'+esc(u.username)+'</strong> <span style="color:#666">('+esc(u.nickname||'-')+')</span><br><small>手机: '+esc(u.phone||'-')+' | 注册: '+esc(u.created_at)+'</small></div>'+
+   '<div style="display:flex;gap:8px"><button class="btn btn-sm btn-primary" onclick="Admin.approveUser('+u.id+');Admin.closeModal(\'pendingUsersModalOverlay\')">通过</button>'+
+   '<button class="btn btn-sm btn-danger" onclick="Admin.rejectUser('+u.id+',\''+esc(u.username)+'\');Admin.closeModal(\'pendingUsersModalOverlay\')">拒绝</button></div></div>'
+ }).join('');
+ document.getElementById('pendingUsersModalOverlay').classList.remove('hidden');
+};
+
+// ===== 邀请码管理 =====
+async function loadInviteCodes(){
+ var r=await api('/invite-codes');
+ var tb=document.getElementById('inviteCodeTableBody');
+ if(r.code!==200)return;
+ var statusMap={active:'有效',disabled:'已禁用'};
+ tb.innerHTML=r.data.map(function(c){
+  var isExpired=c.expires_at&&new Date(c.expires_at)<new Date();
+  var isExhausted=c.max_uses>0&&c.use_count>=c.max_uses;
+  var displayStatus=isExpired?'已过期':isExhausted?'已用完':statusMap[c.status]||c.status;
+  var statusStyle=(c.status==='disabled'||isExpired||isExhausted)?' style="color:#999"':'';
+  var toggleBtn=c.status==='active'?
+   '<button class="btn btn-sm btn-outline" onclick="Admin.toggleInviteCode('+c.id+',\'disabled\')">禁用</button>':
+   '<button class="btn btn-sm btn-primary" onclick="Admin.toggleInviteCode('+c.id+',\'active\')">启用</button>';
+  return '<tr'+statusStyle+'>'+
+   '<td>'+c.id+'</td>'+
+   '<td><code style="background:#f5f5f5;padding:2px 6px;border-radius:4px;user-select:all">'+esc(c.code)+'</code> <button class="btn btn-sm btn-outline" onclick="Admin.copyInviteCode(\''+esc(c.code)+'\')" style="padding:2px 6px;font-size:11px">复制</button></td>'+
+   '<td>'+c.use_count+'/'+c.max_uses+'</td>'+
+   '<td>'+displayStatus+'</td>'+
+   '<td>'+(c.expires_at||'永不过期')+'</td>'+
+   '<td>'+esc(c.created_at)+'</td>'+
+   '<td>'+toggleBtn+' <button class="btn btn-sm btn-danger" onclick="Admin.deleteInviteCode('+c.id+')">删除</button></td>'+
+   '</tr>'
+ }).join('');
+}
+
+window.Admin.showGenerateInviteModal=function(){
+ document.getElementById('inviteCount').value='1';
+ document.getElementById('inviteMaxUses').value='1';
+ document.getElementById('inviteExpiresHours').value='';
+ document.getElementById('generateInviteModalOverlay').classList.remove('hidden');
+};
+
+window.Admin.generateInviteCodes=async function(){
+ var count=parseInt(document.getElementById('inviteCount').value)||1;
+ var max_uses=parseInt(document.getElementById('inviteMaxUses').value)||1;
+ var expires_hours=document.getElementById('inviteExpiresHours').value.trim();
+ var body={count:count,max_uses:max_uses};
+ if(expires_hours) body.expires_hours=parseInt(expires_hours);
+ var r=await api('/invite-codes','POST',body);
+ if(r.code===201){
+  Admin.closeModal('generateInviteModalOverlay');
+  loadInviteCodes();
+  toast(r.message,'success');
+ }else{toast(r.message,'error')}
+};
+
+window.Admin.copyInviteCode=function(code){
+ if(navigator.clipboard){navigator.clipboard.writeText(code).then(function(){toast('已复制到剪贴板','success')})}
+ else{var ta=document.createElement('textarea');ta.value=code;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('已复制到剪贴板','success')}
+};
+
+window.Admin.toggleInviteCode=async function(id,status){
+ var r=await api('/invite-codes/'+id,'PUT',{status:status});
+ if(r.code===200){loadInviteCodes();toast('状态已更新','success')}
+ else{toast(r.message,'error')}
+};
+
+window.Admin.deleteInviteCode=async function(id){
+ if(!confirm('确定要删除该邀请码吗？'))return;
+ var r=await api('/invite-codes/'+id,'DELETE');
+ if(r.code===200){loadInviteCodes();toast('邀请码已删除','success')}
  else{toast(r.message,'error')}
 };
 

@@ -70,6 +70,21 @@
         </div>
       </div>
 
+      <!-- 邀请码（邀请码模式时显示） -->
+      <div class="form-group" id="inviteCodeGroup" style="display:none">
+        <label for="inviteCode">邀请码 <span style="color:var(--error)">*</span></label>
+        <div class="input-wrapper">
+          <span class="input-icon">🎟️</span>
+          <input
+            type="text"
+            id="inviteCode"
+            placeholder="请输入邀请码"
+            autocomplete="off"
+            maxlength="32"
+          />
+        </div>
+      </div>
+
       <!-- 密码 -->
       <div class="form-group">
         <label for="password">密码 <span style="color:var(--error)">*</span></label>
@@ -122,6 +137,29 @@
     // ---- 已登录则跳转 ----
     App.checkLoggedIn();
 
+    // ---- 检查注册模式 ----
+    var _regMode = 'open';
+    (async function() {
+      try {
+        var resp = await fetch(location.origin + '/api/settings/registration-mode');
+        var data = await resp.json();
+        if (data.code === 200 && data.data) {
+          _regMode = data.data.mode;
+          if (_regMode === 'closed') {
+            document.getElementById('registerForm').innerHTML = '<p style="text-align:center;color:#666;padding:40px 0;font-size:15px">🚫 当前注册已关闭，请联系管理员</p>';
+            document.querySelector('.form-footer').style.display = 'none';
+            return;
+          }
+          if (_regMode === 'invite') {
+            document.getElementById('inviteCodeGroup').style.display = '';
+          }
+          if (_regMode === 'review') {
+            document.getElementById('registerBtn').textContent = '提交注册申请';
+          }
+        }
+      } catch(e) {}
+    })();
+
     // ---- 密码显隐切换 ----
     const pwdInput = document.getElementById('password');
     const togglePwd = document.getElementById('togglePwd');
@@ -143,6 +181,7 @@
       const phone = document.getElementById('phone').value.trim();
       const password = document.getElementById('password').value;
       const confirmPassword = document.getElementById('confirmPassword').value;
+      const inviteCode = document.getElementById('inviteCode') ? document.getElementById('inviteCode').value.trim() : '';
 
       // ---- 前端校验 ----
       if (!username || !password || !confirmPassword) {
@@ -170,22 +209,38 @@
         return;
       }
 
+      // 邀请码模式下必须填写邀请码
+      if (_regMode === 'invite' && !inviteCode) {
+        App.toast('请输入邀请码', 'error');
+        return;
+      }
+
       App.setBtnLoading(registerBtn, true);
 
       try {
-        const res = await api.register({
-          username,
-          password,
+        var payload = {
+          username: username,
+          password: password,
           nickname: nickname || undefined,
           phone: phone || undefined,
-        });
+        };
+        if (inviteCode) payload.invite_code = inviteCode;
 
-        if (res.code === 201) {
+        const res = await api.register(payload);
+
+        if (res.code === 201 && res.data && res.data.token) {
+          // 开放/邀请码模式：直接登录
           App.saveLogin(res.data.token, res.data.user);
           App.toast('注册成功！欢迎加入 🎉', 'success');
           setTimeout(() => {
             window.location.href = 'home.html';
           }, 800);
+        } else if (res.code === 201) {
+          // 审核模式：无 token 返回
+          App.toast(res.message || '注册成功，请等待管理员审核', 'success');
+          setTimeout(() => {
+            window.location.href = 'index.html';
+          }, 2000);
         } else {
           App.toast(res.message || '注册失败', 'error');
         }

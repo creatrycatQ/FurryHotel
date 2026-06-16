@@ -14,6 +14,9 @@ const {
   upsertGuestByUserId,
   deleteGuestsByUserId,
   getSystemSetting,
+  getInviteCodeByCode,
+  useInviteCode,
+  updateUserInfo,
   db,
 } = require('../database');
 
@@ -38,7 +41,13 @@ const router = express.Router();
  */
 router.post('/register', async (req, res) => {
   try {
-    const { username, password, nickname, phone } = req.body;
+    const { username, password, nickname, phone, invite_code } = req.body;
+
+    // ---- 检查注册模式 ----
+    const mode = getSystemSetting('registration_mode') || 'open';
+    if (mode === 'closed') {
+      return res.status(403).json({ code: 403, message: '当前注册已关闭' });
+    }
 
     // ---- 参数校验 ----
     if (!username || !password) {
@@ -64,6 +73,23 @@ router.post('/register', async (req, res) => {
       });
     }
 
+    // ---- 邀请码模式：验证邀请码 ----
+    if (mode === 'invite') {
+      if (!invite_code) {
+        return res.status(400).json({ code: 400, message: '请输入邀请码' });
+      }
+      const codeRecord = getInviteCodeByCode(invite_code.trim());
+      if (!codeRecord || codeRecord.status !== 'active') {
+        return res.status(400).json({ code: 400, message: '邀请码无效' });
+      }
+      if (codeRecord.max_uses > 0 && codeRecord.use_count >= codeRecord.max_uses) {
+        return res.status(400).json({ code: 400, message: '邀请码已达使用上限' });
+      }
+      if (codeRecord.expires_at && new Date(codeRecord.expires_at) < new Date()) {
+        return res.status(400).json({ code: 400, message: '邀请码已过期' });
+      }
+    }
+
     // 检查用户名是否已存在
     const existingUser = findUserByUsername(username);
     if (existingUser) {
@@ -84,6 +110,20 @@ router.post('/register', async (req, res) => {
       nickname: nickname || username,
       phone: phone || '',
     });
+
+    // ---- 审核模式：设为 pending，不发 token ----
+    if (mode === 'review') {
+      updateUserInfo(newUser.id, { status: 'pending' });
+      return res.status(201).json({
+        code: 201,
+        message: '注册成功，请等待管理员审核',
+      });
+    }
+
+    // ---- 邀请码模式：消耗邀请码 ----
+    if (mode === 'invite') {
+      useInviteCode(invite_code.trim(), newUser.id);
+    }
 
     // 生成 token
     const token = jwt.sign(
@@ -201,6 +241,14 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({
         code: 403,
         message: '管理员账号请从后台登录',
+      });
+    }
+
+    // 审核中的用户不允许登录
+    if (user.status === 'pending') {
+      return res.status(403).json({
+        code: 403,
+        message: '您的账号正在审核中，请耐心等待管理员通过',
       });
     }
 

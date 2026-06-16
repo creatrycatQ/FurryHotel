@@ -9,3 +9,10 @@ Thumbs.db
 *.log
 *.lnk
 .claude/
+
+# Sensitive / binary files
+cert.pem
+*.pem
+cloudflared.exe
+config.yml
+mytunnel.json

@@ -176,6 +176,28 @@ db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('session_
 db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('site_title', 'FurryHotel')").run();
 db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('site_subtitle', 'xxx小聚，欢迎参加')").run();
 db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('copyright_text', '© 2024 FurryHotel')").run();
+// 插入默认设置：注册模式（open/closed/review/invite）
+db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('registration_mode', 'open')").run();
+
+// ---------- 迁移：为 users 表补充 status 列 ----------
+const userCols2 = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+if (!userCols2.includes('status')) {
+  db.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+}
+
+// ---------- 新增 invite_codes 表 ----------
+db.exec(`
+  CREATE TABLE IF NOT EXISTS invite_codes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    code        TEXT    NOT NULL UNIQUE,
+    created_by  INTEGER,
+    max_uses    INTEGER NOT NULL DEFAULT 1,
+    use_count   INTEGER NOT NULL DEFAULT 0,
+    expires_at  TEXT,
+    status      TEXT    NOT NULL DEFAULT 'active',
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+`);
 
 // ---------- 插入默认管理员和示例数据 ----------
 const admin = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
@@ -219,7 +241,7 @@ const ALLOWED_FIELDS = {
   rooms: ['room_number', 'room_type', 'floor', 'price', 'status', 'description'],
   guests: ['name', 'phone', 'id_card', 'room_id', 'check_in', 'check_out', 'status', 'user_id'],
   orders: ['guest_name', 'guest_phone', 'room_id', 'total_price', 'status', 'remark', 'room_type', 'reject_reason'],
-  users: ['nickname', 'phone', 'role', 'real_name', 'id_card', 'avatar'],
+  users: ['nickname', 'phone', 'role', 'real_name', 'id_card', 'avatar', 'status'],
   room_types: ['name', 'label', 'base_price', 'description', 'default_deposit'],
   deposits: ['status', 'remark', 'resolved_at'],
 };
@@ -309,7 +331,7 @@ function getAllRooms() {
            u.nickname AS occupant_nickname,
            u.avatar AS occupant_avatar
     FROM rooms r
-    LEFT JOIN orders o ON o.room_id = r.id AND o.status IN ('confirmed', 'checked_in', 'pending')
+    LEFT JOIN orders o ON o.room_id = r.id AND o.status IN ('approved', 'confirmed', 'checked_in', 'pending')
     LEFT JOIN users u ON u.id = o.user_id
     ORDER BY r.floor, r.room_number
   `).all();
@@ -560,7 +582,7 @@ function getRoomOccupants(room_id) {
     FROM orders o
     JOIN order_guests og ON og.order_id = o.id
     JOIN users u ON og.user_id = u.id
-    WHERE o.room_id = ? AND o.status IN ('confirmed', 'checked_in', 'pending')
+    WHERE o.room_id = ? AND o.status IN ('approved', 'confirmed', 'checked_in', 'pending')
   `).all(room_id);
 }
 
@@ -653,6 +675,49 @@ function getAllSettings() {
   return db.prepare('SELECT * FROM system_settings').all();
 }
 
+// -- 邀请码 --
+function createInviteCode({ code, created_by, max_uses, expires_at }) {
+  return db.prepare(`
+    INSERT INTO invite_codes (code, created_by, max_uses, expires_at)
+    VALUES (@code, @created_by, @max_uses, @expires_at)
+  `).run({ code, created_by, max_uses: max_uses || 1, expires_at: expires_at || null });
+}
+
+function getInviteCodes() {
+  return db.prepare('SELECT * FROM invite_codes ORDER BY id DESC').all();
+}
+
+function getInviteCodeByCode(code) {
+  return db.prepare('SELECT * FROM invite_codes WHERE code = ?').get(code);
+}
+
+function useInviteCode(code, userId) {
+  return db.prepare(`
+    UPDATE invite_codes SET use_count = use_count + 1 WHERE code = ?
+  `).run(code);
+}
+
+function updateInviteCodeStatus(id, status) {
+  return db.prepare('UPDATE invite_codes SET status = ? WHERE id = ?').run(status, id);
+}
+
+function deleteInviteCode(id) {
+  return db.prepare('DELETE FROM invite_codes WHERE id = ?').run(id);
+}
+
+// -- 用户审核 --
+function getPendingUsers() {
+  return db.prepare("SELECT id, username, nickname, phone, created_at FROM users WHERE status = 'pending' ORDER BY id DESC").all();
+}
+
+function approveUser(id) {
+  return db.prepare("UPDATE users SET status = 'active', updated_at = datetime('now','localtime') WHERE id = ?").run(id);
+}
+
+function rejectUser(id) {
+  return db.prepare('DELETE FROM users WHERE id = ?').run(id);
+}
+
 module.exports = {
   db,
   findUserByUsername,
@@ -704,4 +769,13 @@ module.exports = {
   getSystemSetting,
   setSystemSetting,
   getAllSettings,
+  createInviteCode,
+  getInviteCodes,
+  getInviteCodeByCode,
+  useInviteCode,
+  updateInviteCodeStatus,
+  deleteInviteCode,
+  getPendingUsers,
+  approveUser,
+  rejectUser,
 };
