@@ -3,9 +3,15 @@
  * Node.js + Express + SQLite
  */
 
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
+const fs = require('fs');
 
 const { CORS_ORIGINS } = require('./config');
 const authRoutes = require('./routes/auth');
@@ -17,6 +23,11 @@ const PORT = process.env.PORT || 3000;
 
 // ---------- 中间件 ----------
 
+// 安全响应头
+app.use(helmet({
+  contentSecurityPolicy: false, // 前端使用 CDN 和内联脚本，暂不启用 CSP
+}));
+
 // CORS 配置（开发环境允许所有来源，生产环境应设置 CORS_ORIGINS 环境变量）
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? CORS_ORIGINS : '*',
@@ -24,18 +35,35 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// 解析 JSON 请求体
-app.use(express.json());
+// 解析 JSON 请求体（限制 body 大小）
+app.use(express.json({ limit: '1mb' }));
 
 // 解析 URL 编码请求体
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// 请求日志
-app.use((req, res, next) => {
-  const timestamp = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-  console.log(`[${timestamp}] ${req.method} ${req.url}`);
-  next();
+// HTTP 请求日志
+if (process.env.NODE_ENV === 'production') {
+  // 生产环境：写入日志文件
+  const logDir = path.join(__dirname, 'logs');
+  if (!fs.existsSync(logDir)) fs.mkdirSync(logDir);
+  const accessLogStream = fs.createWriteStream(path.join(logDir, 'access.log'), { flags: 'a' });
+  app.use(morgan('combined', { stream: accessLogStream }));
+} else {
+  // 开发环境：输出到控制台
+  app.use(morgan('dev'));
+}
+
+// 登录/注册接口限流（防暴力破解）
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 分钟窗口
+  max: 5,              // 每 IP 最多 5 次
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { code: 429, message: '请求过于频繁，请 1 分钟后再试' },
 });
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/admin-login', authLimiter);
 
 // ---------- 静态文件：前端页面 ----------
 const frontEndPath = path.join(__dirname, '..', 'FrontEnd');
@@ -70,7 +98,8 @@ app.get('/api/room-types', (req, res) => {
       id: t.id,
       name: t.name,
       label: t.label || t.name,
-      base_price: t.base_price,
+      basePrice: t.base_price,
+      description: t.description || '',
       available: countMap[t.name] || 0,
     }));
     res.json({ code: 200, data: result });
@@ -80,13 +109,75 @@ app.get('/api/room-types', (req, res) => {
   }
 });
 
+// 公开接口：获取可预订房间列表（无需登录）
+app.get('/api/rooms/available', (req, res) => {
+  try {
+    const { db } = require('./database');
+    const rooms = db.prepare(
+      `SELECT r.id, r.room_number, r.room_type, r.floor, r.price, r.description,
+              COALESCE(t.label, r.room_type) as type_label
+       FROM rooms r
+       LEFT JOIN room_types t ON r.room_type = t.name
+       WHERE r.status = 'available'
+       ORDER BY r.room_type, r.floor, r.room_number`
+    ).all();
+    res.json({ code: 200, data: rooms });
+  } catch (err) {
+    console.error('获取可用房间失败:', err);
+    res.status(500).json({ code: 500, message: '服务器内部错误' });
+  }
+});
+
+// 公开接口：查询预定是否开放（无需登录）
+app.get('/api/settings/booking-status', (req, res) => {
+  try {
+    const { getSystemSetting } = require('./database');
+    const value = getSystemSetting('booking_open');
+    res.json({ code: 200, data: { open: value === '1' } });
+  } catch (err) {
+    console.error('获取预定状态失败:', err);
+    res.status(500).json({ code: 500, message: '服务器内部错误' });
+  }
+});
+
+// 公开接口：获取会话超时配置（无需登录，前端启动时拉取）
+app.get('/api/settings/session-timeout', (req, res) => {
+  try {
+    const { getSystemSetting } = require('./database');
+    const value = getSystemSetting('session_timeout_minutes');
+    const minutes = parseInt(value) || 480;
+    res.json({ code: 200, data: { timeout_minutes: minutes } });
+  } catch (err) {
+    console.error('获取会话超时配置失败:', err);
+    res.status(500).json({ code: 500, message: '服务器内部错误' });
+  }
+});
+
+// 公开接口：获取网站信息（标题、副标题、版权）
+app.get('/api/settings/site-info', (req, res) => {
+  try {
+    const { getSystemSetting } = require('./database');
+    const site_title = getSystemSetting('site_title') || 'FurryHotel';
+    const site_subtitle = getSystemSetting('site_subtitle') || 'xxx小聚，欢迎参加';
+    const copyright_text = getSystemSetting('copyright_text') || '© 2024 FurryHotel';
+    res.json({ code: 200, data: { site_title, site_subtitle, copyright_text } });
+  } catch (err) {
+    console.error('获取网站信息失败:', err);
+    res.status(500).json({ code: 500, message: '服务器内部错误' });
+  }
+});
+
 // 健康检查
 app.get('/api/health', (req, res) => {
-  res.json({
+  const response = {
     status: 'ok',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-  });
+  };
+  // 仅开发环境暴露 uptime
+  if (process.env.NODE_ENV !== 'production') {
+    response.uptime = process.uptime();
+  }
+  res.json(response);
 });
 
 // 404 处理
@@ -115,7 +206,7 @@ app.use((err, req, res, next) => {
 
 const HOST = '0.0.0.0';
 
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   const os = require('os');
   const nets = os.networkInterfaces();
   const ipList = [];
@@ -130,6 +221,7 @@ app.listen(PORT, HOST, () => {
   console.log('');
   console.log('========================================');
   console.log(`  FurryHotel Server Started`);
+  console.log(`  ENV: ${process.env.NODE_ENV || 'development'}`);
   console.log('========================================');
   console.log(`  Local:   http://localhost:${PORT}`);
   ipList.forEach(ip => {
@@ -138,5 +230,28 @@ app.listen(PORT, HOST, () => {
   console.log('========================================');
   console.log('');
 });
+
+// ---------- 优雅关闭 ----------
+
+function gracefulShutdown(signal) {
+  console.log(`\n[${signal}] 正在关闭服务器...`);
+  server.close(() => {
+    console.log('HTTP 服务器已关闭');
+    try {
+      const { db } = require('./database');
+      db.close();
+      console.log('数据库连接已关闭');
+    } catch (e) { /* ignore */ }
+    process.exit(0);
+  });
+  // 超时强制退出
+  setTimeout(() => {
+    console.error('关闭超时，强制退出');
+    process.exit(1);
+  }, 5000);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 module.exports = app;

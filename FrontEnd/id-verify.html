@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f59e0b" />
   <title>实名信息 - FurryHotel</title>
   <link rel="stylesheet" href="css/style.css" />
@@ -53,6 +53,8 @@
   <script src="js/api.js"></script>
   <script src="js/app.js"></script>
   <script>
+    function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
     if (!App.requireAuth()) {}
 
     var token = localStorage.getItem('token');
@@ -60,7 +62,7 @@
     // 加载已有实名信息
     async function loadProfile() {
       try {
-        var r = await fetch('http://localhost:3000/api/auth/me', {
+        var r = await fetch(location.origin + '/api/auth/me', {
           headers: { Authorization: 'Bearer ' + token }
         });
         var d = await r.json();
@@ -103,20 +105,20 @@
       msg.innerHTML = '';
 
       try {
-        var r = await fetch('http://localhost:3000/api/auth/profile', {
+        var r = await fetch(location.origin + '/api/auth/profile', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({ real_name: realName, id_card: idCard, phone: phone || undefined })
         });
         var d = await r.json();
         if (d.code === 200) {
-          msg.innerHTML = '<span style="color:var(--success)">✓ ' + d.message + '，3秒后返回首页...</span>';
+          msg.innerHTML = '<span style="color:var(--success)">✓ ' + esc(d.message) + '，3秒后返回首页...</span>';
           btn.textContent = '更新实名信息';
           var user = App.getUser();
           if (user) { user.real_name = realName; user.id_card = idCard; user.phone = phone; localStorage.setItem('user', JSON.stringify(user)); }
           setTimeout(function() { location.href = 'home.html'; }, 3000);
         } else {
-          msg.innerHTML = '<span style="color:var(--error)">' + (d.message || '提交失败') + '</span>';
+          msg.innerHTML = '<span style="color:var(--error)">' + esc(d.message || '提交失败') + '</span>';
         }
       } catch(ex) {
         msg.innerHTML = '<span style="color:var(--error)">网络错误</span>';

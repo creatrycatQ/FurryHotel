@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f59e0b" />
+  <title>剩余房间 - FurryHotel</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .type-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px; border: 1.5px solid var(--border); border-radius: 12px;
+      background: #fafaf9; margin-bottom: 12px; transition: border-color .2s;
+    }
+    .type-item:last-child { margin-bottom: 0; }
+    .type-item:hover { border-color: var(--primary); }
+    .type-info { flex: 1; min-width: 0; }
+    .type-name { font-size: 16px; font-weight: 700; color: var(--text); }
+    .type-meta { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
+    .type-meta .price { color: var(--primary-dark); font-weight: 600; }
+    .type-desc { font-size: 12px; color: #a8a29e; margin-top: 3px; }
+    .type-badge {
+      flex-shrink: 0; margin-left: 12px;
+      font-size: 13px; font-weight: 700; padding: 6px 12px;
+      border-radius: 20px; white-space: nowrap;
+    }
+    .type-badge.has-room { background: #ecfdf5; color: #16a34a; }
+    .type-badge.no-room { background: #f5f5f4; color: #a8a29e; }
+    .room-expand {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      padding: 10px 14px 14px; margin-top: -2px;
+      border: 1.5px solid var(--border); border-top: none;
+      border-radius: 0 0 12px 12px; background: #fff;
+      margin-bottom: 12px;
+    }
+    .room-chip {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500;
+      background: #fef3c7; color: var(--primary-dark);
+    }
+    .room-chip .floor { font-size: 11px; color: var(--text-secondary); font-weight: 400; }
+    .no-room-text { font-size: 12px; color: #a8a29e; }
+  </style>
+</head>
+<body>
+
+  <div class="logo-area">
+    <span class="logo-icon">🏨</span>
+    <h1 class="logo-title">剩余房间</h1>
+    <p class="logo-sub">查看各房型可预订房间</p>
+  </div>
+
+  <div class="card">
+    <div id="roomContent">
+      <div style="text-align:center;padding:24px 0;color:#a8a29e;font-size:14px;">加载中…</div>
+    </div>
+
+    <button type="button" class="btn btn-primary" id="bookBtn" onclick="location.href='reserve.html'" style="margin-top:16px;">立即预定</button>
+    <button type="button" class="btn" onclick="location.href='home.html'" style="margin-top:10px;background:#e7e5e4;color:#44403c;width:100%;">返回首页</button>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!App.requireAuth()) {}
+
+    // 检查预定开关
+    (function checkBookingStatus() {
+      fetch('/api/settings/booking-status')
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          var btn = document.getElementById('bookBtn');
+          if (res.code === 200 && res.data && !res.data.open) {
+            btn.disabled = true;
+            btn.textContent = '预定暂未开放';
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+            btn.onclick = null;
+          }
+        })
+        .catch(function() {});
+    })();
+
+    (function loadAvailableRooms() {
+      var container = document.getElementById('roomContent');
+
+      Promise.all([
+        fetch('/api/room-types').then(function(r) { return r.json(); }),
+        fetch('/api/rooms/available').then(function(r) { return r.json(); })
+      ]).then(function(results) {
+        var typesRes = results[0];
+        var roomsRes = results[1];
+
+        if (typesRes.code !== 200 || !typesRes.data || !typesRes.data.length) {
+          container.innerHTML = '<div style="text-align:center;padding:24px 0;color:#a8a29e;">暂无房型信息</div>';
+          return;
+        }
+
+        var types = typesRes.data;
+        var rooms = (roomsRes.code === 200 && roomsRes.data) ? roomsRes.data : [];
+
+        // 按房型分组
+        var grouped = {};
+        types.forEach(function(t) { grouped[t.name] = []; });
+        rooms.forEach(function(r) {
+          if (grouped[r.room_type]) {
+            grouped[r.room_type].push(r);
+          } else {
+            // 房间类型不在 room_types 中，用 type_label 归为"其他"
+            if (!grouped['__other__']) grouped['__other__'] = [];
+            grouped['__other__'].push(r);
+          }
+        });
+
+        var html = '';
+        types.forEach(function(t) {
+          var list = grouped[t.name] || [];
+          var count = t.available;
+          var hasRoom = count > 0;
+
+          html += '<div class="type-item">';
+          html += '<div class="type-info">';
+          html += '<div class="type-name">' + esc(t.label) + '</div>';
+          html += '<div class="type-meta"><span class="price">¥' + (t.basePrice || 0) + '</span> /晚</div>';
+          if (t.description) html += '<div class="type-desc">' + esc(t.description) + '</div>';
+          html += '</div>';
+          html += '<span class="type-badge ' + (hasRoom ? 'has-room' : 'no-room') + '">剩余 ' + count + '</span>';
+          html += '</div>';
+
+          // 展开房间列表
+          if (list.length > 0) {
+            html += '<div class="room-expand">';
+            list.forEach(function(r) {
+              html += '<span class="room-chip">' + esc(r.room_number) + ' <span class="floor">' + r.floor + 'F · ¥' + r.price + '</span></span>';
+            });
+            html += '</div>';
+          } else if (!hasRoom) {
+            html += '<div class="room-expand"><span class="no-room-text">该房型暂无空房</span></div>';
+          }
+        });
+
+        // 未归类的房间
+        if (grouped['__other__'] && grouped['__other__'].length > 0) {
+          var otherList = grouped['__other__'];
+          html += '<div class="type-item">';
+          html += '<div class="type-info"><div class="type-name">其他</div></div>';
+          html += '<span class="type-badge has-room">剩余 ' + otherList.length + '</span>';
+          html += '</div>';
+          html += '<div class="room-expand">';
+          otherList.forEach(function(r) {
+            html += '<span class="room-chip">' + esc(r.room_number) + ' <span class="floor">' + r.floor + 'F · ¥' + r.price + '</span></span>';
+          });
+          html += '</div>';
+        }
+
+        container.innerHTML = html;
+      }).catch(function() {
+        container.innerHTML = '<div style="text-align:center;padding:24px 0;color:var(--error);">加载失败，请稍后重试</div>';
+      });
+    })();
+
+    function esc(s) {
+      var d = document.createElement('div');
+      d.textContent = s || '';
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>

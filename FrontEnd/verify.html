@@ -2,11 +2,11 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f59e0b" />
   <title>FurryHotel - 在线核验</title>
   <link rel="stylesheet" href="css/style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js" integrity="sha384-HGmnkDZJy7mRkoARekrrj0VjEFSh9a0Z8qxGri/kTTAJkgR8hqD1lHsYSh3JdzRi" crossorigin="anonymous"></script>
   <style>
     .order-list { width: 100%; max-width: 400px; padding-bottom: 40px; }
     .order-card {
@@ -36,6 +36,7 @@
     .status-pending { background: #fef3c7; color: #92400e; }
     .status-confirmed { background: #d1fae5; color: #065f46; }
     .status-checked_in { background: #dbeafe; color: #1e40af; }
+    .status-completed { background: #e0e7ff; color: #3730a3; }
     .status-cancelled { background: #fee2e2; color: #991b1b; }
     .order-info { font-size: 13px; color: var(--text-secondary); line-height: 1.8; }
     .order-info span { color: var(--text); font-weight: 500; }
@@ -91,21 +92,16 @@
   <script src="js/api.js"></script>
   <script src="js/app.js"></script>
   <script>
-    if (!App.requireAuth()) { /* redirect */ }
+    function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-    const statusMap = {
-      pending: '待确认',
-      confirmed: '已确认',
-      checked_in: '已入住',
-      cancelled: '已取消',
-    };
+    if (!App.requireAuth()) { /* redirect */ }
 
     async function loadOrders() {
       const container = document.getElementById('orderContainer');
       try {
         const res = await api.getUserOrders();
         if (res.code !== 200) {
-          container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${res.message || '加载失败'}</p></div>`;
+          container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${esc(res.message || '加载失败')}</p></div>`;
           return;
         }
 
@@ -121,18 +117,16 @@
           card.className = 'order-card';
 
           const statusClass = `status-${order.status}`;
-          const statusText = statusMap[order.status] || order.status;
+          const statusText = App.getStatusText(order.status);
 
           card.innerHTML = `
             <div class="order-header">
               <span class="order-id">订单 #${order.id}</span>
-              <span class="order-status ${statusClass}">${statusText}</span>
+              <span class="order-status ${statusClass}">${esc(statusText)}</span>
             </div>
             <div class="order-info">
-              👤 入住人：<span>${order.guest_name}</span><br/>
-              🏨 房间：<span>${order.room_number || '待分配'} ${order.room_type || ''}</span><br/>
-              📅 入住：<span>${order.check_in_date}</span><br/>
-              📅 离店：<span>${order.check_out_date}</span>
+              👤 入住人：<span>${esc(order.guest_name)}</span><br/>
+              🏨 房间：<span>${esc(order.room_number || '待分配')} ${esc(order.room_type_label || order.room_type || '')}</span>
             </div>
             ${(order.status === 'pending' || order.status === 'confirmed') ? '<div class="qr-area"><canvas id="qr-' + order.id + '"></canvas><div class="qr-hint">请让前台扫描此二维码完成入住</div></div>' : ''}
             ${order.status === 'checked_in' ? '<div class="qr-area" style="background:#d1fae5;"><div class="qr-hint" style="color:#065f46;font-weight:600;">✅ 已完成核验入住</div></div>' : ''}

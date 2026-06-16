@@ -88,10 +88,40 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); disp
 .page-title { font-size: 22px; margin-bottom: 20px; }
 
 /* ===== 统计卡片 ===== */
-.stat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px; }
 .stat-card { background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; text-align: center; }
+.stat-card-pending { border-left: 4px solid #f59e0b; }
 .stat-label { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
 .stat-value { font-size: 28px; font-weight: 700; color: var(--primary-dark); }
+
+/* ===== 订单筛选标签 ===== */
+.order-filter-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.filter-tab {
+  padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px;
+  background: var(--card-bg); font-size: 13px; font-weight: 500; color: var(--text-secondary);
+  cursor: pointer; transition: all 0.2s;
+}
+.filter-tab:hover { border-color: var(--primary); color: var(--primary); }
+.filter-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.filter-badge {
+  display: inline-block; min-width: 18px; height: 18px; line-height: 18px;
+  padding: 0 5px; border-radius: 9px; font-size: 11px; font-weight: 700;
+  background: #ef4444; color: #fff; text-align: center; margin-left: 4px;
+}
+.filter-badge:empty { display: none; }
+
+/* ===== 审批弹窗详情 ===== */
+.approve-detail { background: #fafaf9; border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+.approve-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+.approve-row:last-child { border-bottom: none; }
+.approve-label { color: var(--text-secondary); }
+.reject-area.hidden { display: none; }
+
+/* ===== 客人卡片 ===== */
+.guest-card { text-align: left; display: flex; flex-direction: column; gap: 6px; }
+.guest-card .stat-label { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.guest-info { font-size: 13px; color: var(--text-secondary); }
+.guest-card-actions { display: flex; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 
 /* ===== 表格 ===== */
 .tab-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
@@ -114,6 +144,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); disp
 .status-checked_out { background: #f3f4f6; color: #78716c; }
 .status-completed { background: #dcfce7; color: #166534; }
 .status-reserved { background: #ede9fe; color: #5b21b6; }
+.status-collected { background: #fef3c7; color: #92400e; }
+.status-refunded { background: #d1fae5; color: #065f46; }
+.status-forfeited { background: #fee2e2; color: #991b1b; }
+.form-value { font-size: 14px; font-weight: 500; display: inline-block; padding: 4px 0; }
 
 /* ===== 按钮 ===== */
 .btn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 16px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: opacity 0.15s; }
@@ -153,9 +187,68 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); disp
 
 .hidden { display: none !important; }
 
+/* ===== 房间卡片网格 ===== */
+.room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.room-card {
+  background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 20px; display: flex; flex-direction: column; gap: 10px;
+  border-left: 4px solid var(--border); transition: transform 0.15s, box-shadow 0.15s;
+}
+.room-card:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+.room-card.border-available { border-left-color: var(--success); }
+.room-card.border-occupied { border-left-color: var(--danger); }
+.room-card.border-reserved { border-left-color: #8b5cf6; }
+.room-card.border-cleaning { border-left-color: var(--warning); }
+.room-card.border-maintenance { border-left-color: var(--info); }
+.room-card-header { display: flex; justify-content: space-between; align-items: center; }
+.room-card-number { font-size: 20px; font-weight: 700; color: var(--text); }
+.room-card-floor { font-size: 12px; color: var(--text-secondary); }
+.room-card-type { font-size: 13px; color: var(--text-secondary); }
+.room-card-price { font-size: 18px; font-weight: 700; color: var(--primary-dark); }
+.room-card-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.4; min-height: 17px; }
+.room-card-occupant { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); flex-wrap: wrap; }
+.occupant-label { font-size: 12px; color: var(--text-secondary); }
+.occupant-avatars { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.occupant-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary); flex-shrink: 0; }
+.occupant-list { display: flex; flex-direction: column; gap: 0; width: 100%; margin-top: 4px; }
+.occupant-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.occupant-row:last-child { border-bottom: none; }
+.occupant-nickname { font-size: 13px; font-weight: 500; color: var(--text); min-width: 60px; }
+.occupant-realname { font-size: 12px; color: var(--text-secondary); }
+.occupant-name { font-size: 12px; color: var(--text); margin-right: 4px; }
+.user-search-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; margin-bottom: 6px; outline: none; transition: border-color var(--transition); }
+.user-search-input:focus { border-color: var(--primary); }
+.user-select-count { font-size: 12px; color: var(--primary); margin-left: 8px; font-weight: 600; }
+.multi-select-box { max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.multi-select-item { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; padding: 6px 8px; border-radius: 6px; transition: background var(--transition); }
+.multi-select-item:hover { background: var(--bg); }
+.multi-select-item.checked { background: #fef3c7; }
+.multi-select-item input[type=checkbox] { accent-color: var(--primary); flex-shrink: 0; }
+.multi-select-item .user-info { display: flex; flex-direction: column; gap: 1px; }
+.multi-select-item .user-name { font-weight: 500; }
+.multi-select-item .user-detail { font-size: 11px; color: var(--text-secondary); }
+.multi-select-empty { text-align: center; padding: 16px; color: var(--text-secondary); font-size: 13px; }
+.room-card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+
 /* ===== Toast ===== */
 .toast { position: fixed; top: 16px; right: 16px; padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; color: #fff; z-index: 9999; opacity: 0; transform: translateX(20px); transition: all 0.3s; pointer-events: none; }
 .toast.show { opacity: 1; transform: translateX(0); }
 .toast-success { background: var(--success); }
 .toast-error { background: var(--danger); }
 .toast-info { background: var(--info); }
+
+/* ===== 系统设置 ===== */
+.settings-card { background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; max-width: 600px; }
+.setting-item { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.setting-item:last-child { border-bottom: none; }
+.setting-info { display: flex; flex-direction: column; gap: 4px; }
+.setting-label { font-size: 15px; font-weight: 600; color: var(--text); }
+.setting-desc { font-size: 13px; color: var(--text-secondary); }
+
+/* Toggle Switch */
+.toggle-switch { position: relative; display: inline-block; width: 48px; height: 26px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; cursor: pointer; inset: 0; background: #d6d3d1; border-radius: 26px; transition: background 0.25s; }
+.toggle-slider::before { content: ''; position: absolute; width: 20px; height: 20px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform 0.25s; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+.toggle-switch input:checked + .toggle-slider { background: var(--success); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(22px); }

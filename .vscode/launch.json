@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "启动服务器",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/RearEnd/server.js",
+      "cwd": "${workspaceFolder}/RearEnd",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "修复残留订单",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/RearEnd/fix-stale-orders.js",
+      "cwd": "${workspaceFolder}/RearEnd",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}

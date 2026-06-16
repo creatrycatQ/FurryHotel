@@ -2,10 +2,11 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f59e0b" />
   <title>我要预定 - FurryHotel</title>
   <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js" integrity="sha384-HGmnkDZJy7mRkoARekrrj0VjEFSh9a0Z8qxGri/kTTAJkgR8hqD1lHsYSh3JdzRi" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -80,7 +81,7 @@
 
     <p id="statusMsg" style="text-align:center;font-size:13px;min-height:20px;margin:8px 0"></p>
 
-    <button type="button" class="btn btn-primary" id="submitBtn">提交预定</button>
+    <button type="button" class="btn btn-primary" id="submitBtn">提交预约申请</button>
     <button type="button" class="btn" onclick="location.href='home.html'" style="margin-top:10px;background:#e7e5e4;color:#44403c;width:100%;">返回首页</button>
   </div>
 
@@ -89,7 +90,30 @@
   <script src="js/api.js"></script>
   <script src="js/app.js"></script>
   <script>
+    function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
     if (!App.requireAuth()) {}
+
+    // ===== 检查预定开关 =====
+    var bookingClosed = false;
+    (function checkBookingStatus() {
+      fetch('/api/settings/booking-status')
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.code === 200 && res.data && !res.data.open) {
+            bookingClosed = true;
+            var card = document.querySelector('.card');
+            card.innerHTML = ''
+              + '<div style="text-align:center;padding:40px 20px;">'
+              +   '<div style="font-size:48px;margin-bottom:16px;">🔒</div>'
+              +   '<h2 style="color:var(--text);margin:0 0 12px;">预定暂未开放</h2>'
+              +   '<p style="font-size:14px;color:var(--text-secondary);margin:0 0 24px;">请等待管理员开放预定通道</p>'
+              +   '<a href="home.html" class="btn" style="display:inline-block;text-decoration:none;background:#e7e5e4;color:#44403c;padding:12px 32px;">返回首页</a>'
+              + '</div>';
+          }
+        })
+        .catch(function() {});
+    })();
 
     // ===== 从后端加载房型 =====
     (function loadRoomTypes() {
@@ -157,7 +181,7 @@
           if (u.real_name) {
             userIdentity.real_name = u.real_name;
             userIdentity.phone = u.phone || '';
-            el.innerHTML = '<span>✅ 入住人：' + u.real_name + (u.phone ? '　电话：' + u.phone : '') + '</span>';
+            el.innerHTML = '<span>✅ 入住人：' + esc(u.real_name) + (u.phone ? '　电话：' + esc(u.phone) : '') + '</span>';
           } else {
             el.innerHTML = '<span style="color:var(--error)">⚠️ 您尚未完成实名认证，<a href="id-verify.html" style="color:var(--primary)">去认证</a></span>';
             document.getElementById('submitBtn').disabled = true;
@@ -187,13 +211,6 @@
       btn.textContent = '提交中…';
       msg.innerHTML = '';
 
-      // 默认入住今天，离店明天
-      var today = new Date();
-      var tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      var checkIn = today.toISOString().slice(0, 10);
-      var checkOut = tomorrow.toISOString().slice(0, 10);
-
       fetch('/api/user/orders', {
         method: 'POST',
         headers: {
@@ -205,29 +222,35 @@
           guests: parseInt(guests) || 1,
           guest_name: userIdentity.real_name,
           guest_phone: userIdentity.phone,
-          check_in_date: checkIn,
-          check_out_date: checkOut,
           remark: remark
         })
       })
       .then(function(r) { return r.json(); })
       .then(function(res) {
         btn.disabled = false;
-        btn.textContent = '提交预定';
+        btn.textContent = '提交预约申请';
         if (res.code === 200) {
-          msg.innerHTML = '<span style="color:var(--success)">🎉 预定成功！房间号：' + res.data.room_number + '，合计 ¥' + res.data.total_price + '</span>';
-          // 清空表单
-          document.getElementById('roomType').value = '';
-          document.getElementById('roomLabel').textContent = '请选择房型';
-          document.getElementById('guests').value = '1';
-          document.getElementById('remark').value = '';
+          var orderId = res.data.order_id;
+          var card = document.querySelector('.card');
+          card.innerHTML = ''
+            + '<div style="text-align:center;padding:20px 0;">'
+            +   '<div style="font-size:48px;margin-bottom:12px;">✅</div>'
+            +   '<h2 style="color:var(--text);margin:0 0 8px;">预约申请已提交</h2>'
+            +   '<p style="font-size:14px;color:var(--text-secondary);margin:0 0 16px;">请等待管理员审批，通过后将分配房间</p>'
+            +   '<div style="background:#fef3c7;border-radius:12px;padding:16px;margin-bottom:16px;">'
+            +     '<p style="font-size:15px;font-weight:700;color:var(--text);margin:0;">订单号：#' + orderId + '</p>'
+            +     '<p style="font-size:13px;color:var(--text-secondary);margin:8px 0 0;">当前状态：待审批</p>'
+            +   '</div>'
+            +   '<a href="orders.html" class="btn btn-primary" style="display:inline-block;text-decoration:none;width:auto;padding:12px 32px;">查看我的订单</a>'
+            +   '<br/><a href="home.html" style="display:inline-block;margin-top:12px;font-size:14px;color:var(--primary-dark);text-decoration:none;">返回首页</a>'
+            + '</div>';
         } else {
-          msg.innerHTML = '<span style="color:var(--error)">' + (res.message || '预定失败') + '</span>';
+          msg.innerHTML = '<span style="color:var(--error)">' + esc(res.message || '提交失败') + '</span>';
         }
       })
       .catch(function() {
         btn.disabled = false;
-        btn.textContent = '提交预定';
+        btn.textContent = '提交预约申请';
         msg.innerHTML = '<span style="color:var(--error)">网络错误，请稍后重试</span>';
       });
     });

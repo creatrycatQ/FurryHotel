@@ -46,11 +46,24 @@
           <a class="nav-sub-item" data-tab="orders" href="javascript:;">订单列表</a>
         </div>
       </div>
+      <div class="nav-group">
+        <a class="nav-item nav-parent" href="javascript:;">
+          <span class="nav-icon">💰</span><span class="nav-text">押金管理</span>
+          <span class="nav-arrow">▸</span>
+        </a>
+        <div class="nav-submenu">
+          <a class="nav-sub-item" data-tab="deposit" href="javascript:;">用户押金</a>
+        </div>
+      </div>
+
       <a class="nav-item" data-tab="verify" href="javascript:;">
         <span class="nav-icon">✅</span><span class="nav-text">在线核验</span>
       </a>
       <a class="nav-item" data-tab="users" href="javascript:;">
         <span class="nav-icon">👤</span><span class="nav-text">账号管理</span>
+      </a>
+      <a class="nav-item" data-tab="settings" href="javascript:;">
+        <span class="nav-icon">⚙️</span><span class="nav-text">系统设置</span>
       </a>
     </nav>
     <div class="sidebar-footer">
@@ -68,6 +81,7 @@
         <div class="stat-card"><div class="stat-label">订单总数</div><div class="stat-value" id="statOrders">--</div></div>
         <div class="stat-card"><div class="stat-label">今日入住</div><div class="stat-value" id="statTodayCheckIn">--</div></div>
         <div class="stat-card"><div class="stat-label">今日营收</div><div class="stat-value" id="statRevenue">--</div></div>
+        <div class="stat-card stat-card-pending" onclick="Admin.gotoPendingOrders()" style="cursor:pointer"><div class="stat-label">待审批订单</div><div class="stat-value" id="statPendingOrders">--</div></div>
       </div>
     </section>
 
@@ -76,7 +90,7 @@
         <h1 class="page-title">🏨 房间管理</h1>
         <button class="btn btn-primary" onclick="showRoomModal()">+ 添加房间</button>
       </div>
-      <table class="data-table"><thead><tr><th>ID</th><th>房间号</th><th>类型</th><th>楼层</th><th>价格</th><th>状态</th><th>描述</th><th>操作</th></tr></thead><tbody id="roomTableBody"></tbody></table>
+      <div class="room-grid" id="roomGrid"></div>
     </section>
 
     <section class="tab-content hidden" id="tab-roomTypes">
@@ -92,10 +106,9 @@
 
     <section class="tab-content hidden" id="tab-guests">
       <div class="tab-header">
-        <h1 class="page-title">👥 客人管理</h1>
-        <button class="btn btn-primary" onclick="showGuestModal()">+ 添加客人</button>
+        <h1 class="page-title">👥 客人信息</h1>
       </div>
-      <table class="data-table"><thead><tr><th>ID</th><th>姓名</th><th>电话</th><th>身份证</th><th>关联账号</th><th>房间</th><th>入住</th><th>退房</th><th>状态</th><th>操作</th></tr></thead><tbody id="guestTableBody"></tbody></table>
+      <div class="stat-grid" id="guestGrid"></div>
     </section>
 
     <section class="tab-content hidden" id="tab-orders">
@@ -103,7 +116,15 @@
         <h1 class="page-title">📋 订单管理</h1>
         <button class="btn btn-primary" onclick="showOrderModal()">+ 新建订单</button>
       </div>
-      <table class="data-table"><thead><tr><th>ID</th><th>客人</th><th>电话</th><th>房间</th><th>入住</th><th>退房</th><th>金额</th><th>状态</th><th>操作</th></tr></thead><tbody id="orderTableBody"></tbody></table>
+      <div class="order-filter-tabs" id="orderFilterTabs">
+        <button class="filter-tab active" data-status="all" onclick="Admin.filterOrders('all')">全部</button>
+        <button class="filter-tab" data-status="pending" onclick="Admin.filterOrders('pending')">待审批 <span class="filter-badge" id="pendingBadge"></span></button>
+        <button class="filter-tab" data-status="confirmed" onclick="Admin.filterOrders('confirmed')">已通过</button>
+        <button class="filter-tab" data-status="checked_in" onclick="Admin.filterOrders('checked_in')">已入住</button>
+        <button class="filter-tab" data-status="completed" onclick="Admin.filterOrders('completed')">已完成</button>
+        <button class="filter-tab" data-status="cancelled" onclick="Admin.filterOrders('cancelled')">已取消</button>
+      </div>
+      <table class="data-table"><thead><tr><th>ID</th><th>客人</th><th>电话</th><th>房间</th><th>金额</th><th>状态</th><th>操作</th></tr></thead><tbody id="orderTableBody"></tbody></table>
     </section>
 
     <section class="tab-content hidden" id="tab-verify">
@@ -111,6 +132,7 @@
       <div class="verify-box">
         <div class="verify-tabs">
           <button class="verify-tab active" onclick="switchVerifyMode('scan')">📷 扫码核验</button>
+          <button class="verify-tab" onclick="switchVerifyMode('file')">📁 拍照识别</button>
           <button class="verify-tab" onclick="switchVerifyMode('manual')">🔢 手动输入</button>
         </div>
         <div id="verifyScanArea">
@@ -120,6 +142,14 @@
             <button class="btn btn-primary" onclick="startScannerManual()" id="btnStartScan">开启摄像头</button>
             <button class="btn btn-outline" onclick="stopScanner()" style="display:none" id="btnStopScan">关闭摄像头</button>
           </div>
+        </div>
+        <div id="verifyFileArea" class="hidden">
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">局域网 HTTP 环境下摄像头可能不可用，可通过拍照上传识别二维码</p>
+          <label for="verifyFileInput" style="display:block;padding:24px;border:2px dashed var(--border);border-radius:12px;text-align:center;cursor:pointer;color:var(--text-secondary);font-size:14px;transition:border-color .2s;">
+            📷 点击拍照或选择含二维码的图片
+          </label>
+          <input type="file" id="verifyFileInput" accept="image/*" capture="environment" style="display:none;" />
+          <div id="fileScanContainer" style="display:none;"></div>
         </div>
         <div id="verifyManualArea" class="hidden">
           <div style="display:flex;gap:12px;align-items:flex-end">
@@ -144,7 +174,112 @@
         <tbody id="userTableBody"></tbody>
       </table>
     </section>
+
+    <section class="tab-content hidden" id="tab-deposit">
+      <div class="tab-header">
+        <h1 class="page-title">💰 用户押金</h1>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>关联订单</th><th>用户</th><th>房间</th><th>金额</th><th>状态</th><th>收取时间</th><th>操作</th></tr></thead>
+        <tbody id="depositTableBody"></tbody>
+      </table>
+    </section>
+
+    <section class="tab-content hidden" id="tab-settings">
+      <div class="tab-header">
+        <h1 class="page-title">⚙️ 系统设置</h1>
+      </div>
+      <div class="settings-card">
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">开放预定</div>
+            <div class="setting-desc">开启后，用户可在前台提交预约申请；关闭后，前台预定入口不可用</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="settingBookingOpen" onchange="Admin.toggleBooking(this.checked)" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">会话超时时间（分钟）</div>
+            <div class="setting-desc">用户无操作超过此时间后将自动退出登录，范围 5 - 10080 分钟</div>
+          </div>
+          <div class="setting-control" style="display:flex;align-items:center;gap:8px">
+            <input type="number" id="settingSessionTimeout" min="5" max="10080" value="480" style="width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px" />
+            <button class="btn btn-sm btn-primary" onclick="Admin.saveSessionTimeout()">保存</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-card" style="margin-top:20px">
+        <h3 style="margin:0 0 16px;font-size:16px;font-weight:600">网站信息</h3>
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">网站标题</div>
+            <div class="setting-desc">显示在前台页面顶部的主标题</div>
+          </div>
+          <div class="setting-control">
+            <input type="text" id="settingSiteTitle" placeholder="FurryHotel" style="width:200px;padding:6px 10px;border:1px solid var(--border);border-radius:6px" />
+          </div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">副标题</div>
+            <div class="setting-desc">显示在主标题下方的描述文字</div>
+          </div>
+          <div class="setting-control">
+            <input type="text" id="settingSiteSubtitle" placeholder="xxx小聚，欢迎参加" style="width:200px;padding:6px 10px;border:1px solid var(--border);border-radius:6px" />
+          </div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">版权文本</div>
+            <div class="setting-desc">显示在前台页面底部的版权信息</div>
+          </div>
+          <div class="setting-control" style="display:flex;align-items:center;gap:8px">
+            <input type="text" id="settingCopyrightText" placeholder="© 2024 FurryHotel" style="width:200px;padding:6px 10px;border:1px solid var(--border);border-radius:6px" />
+            <button class="btn btn-sm btn-primary" onclick="Admin.saveSiteInfo()">保存</button>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
+
+  <!-- 审批订单弹窗 -->
+  <div class="modal-overlay hidden" id="approveModalOverlay">
+    <div class="modal-box">
+      <h3>审批订单</h3>
+      <input type="hidden" id="approveOrderId" />
+      <div class="approve-detail">
+        <div class="approve-row"><span class="approve-label">订单编号</span><span id="approveOrderNo">--</span></div>
+        <div class="approve-row"><span class="approve-label">入住人</span><span id="approveGuest">--</span></div>
+        <div class="approve-row"><span class="approve-label">联系电话</span><span id="approvePhone">--</span></div>
+        <div class="approve-row"><span class="approve-label">申请房型</span><span id="approveRoomType">--</span></div>
+        <div class="approve-row"><span class="approve-label">预估金额</span><span id="approvePrice">--</span></div>
+        <div class="approve-row" id="approveRemarkRow" style="display:none"><span class="approve-label">用户备注</span><span id="approveRemark">--</span></div>
+      </div>
+      <div class="form-group">
+        <label>分配房间</label>
+        <select id="approveRoomSelect" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px">
+          <option value="">自动分配（系统选择第一间可用房间）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>管理员备注（可选）</label>
+        <input type="text" id="approveNote" placeholder="审批备注" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px" />
+      </div>
+      <div class="form-group reject-area hidden" id="rejectArea">
+        <label>拒绝原因</label>
+        <input type="text" id="rejectReason" placeholder="请填写拒绝原因（可选）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-danger" id="approveRejectBtn" onclick="Admin.showRejectArea()">拒绝</button>
+        <button class="btn btn-primary" id="approveConfirmBtn" onclick="Admin.confirmApprove()">确认通过</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('approveModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 修改密码弹窗 -->
   <div class="modal-overlay hidden" id="passwordModalOverlay">
@@ -201,15 +336,11 @@
 
   <div class="modal-overlay hidden" id="guestModalOverlay">
     <div class="modal-box">
-      <h3 id="guestModalTitle">添加客人</h3>
-      <div class="form-group"><label>姓名</label><input id="gmName" placeholder="客人姓名" /></div>
+      <h3 id="guestModalTitle">编辑客人信息</h3>
+      <div class="form-group"><label>真实姓名</label><input id="gmName" placeholder="真实姓名" /></div>
       <div style="display:flex;gap:12px">
         <div class="form-group" style="flex:1"><label>电话</label><input id="gmPhone" placeholder="手机号" /></div>
         <div class="form-group" style="flex:1"><label>身份证</label><input id="gmIdCard" placeholder="身份证号" /></div>
-      </div>
-      <div style="display:flex;gap:12px">
-        <div class="form-group" style="flex:1"><label>房间</label><select id="gmRoomId"><option value="">未分配</option></select></div>
-        <div class="form-group" style="flex:1"><label>入住日期</label><input type="date" id="gmCheckIn" /></div>
       </div>
       <div class="modal-actions">
         <button class="btn btn-primary" onclick="Admin.saveGuest()">保存</button>
@@ -221,15 +352,13 @@
   <div class="modal-overlay hidden" id="orderModalOverlay">
     <div class="modal-box">
       <h3 id="orderModalTitle">新建订单</h3>
-      <div class="form-group"><label>客人姓名</label><input id="omGuestName" placeholder="客人姓名" /></div>
-      <div class="form-group"><label>电话</label><input id="omGuestPhone" placeholder="手机号" /></div>
+      <div class="form-group"><label>入住人员（可多选）<span class="user-select-count" id="omUserCount"></span></label>
+        <input class="user-search-input" id="omUserSearch" placeholder="🔍 搜索姓名 / 手机号..." oninput="filterOrderUsers()" />
+        <div class="multi-select-box" id="omUserSelect"></div>
+      </div>
       <div style="display:flex;gap:12px">
         <div class="form-group" style="flex:1"><label>房间</label><select id="omRoomId"><option value="">请选择</option></select></div>
         <div class="form-group" style="flex:1"><label>金额</label><input type="number" id="omPrice" value="0" /></div>
-      </div>
-      <div style="display:flex;gap:12px">
-        <div class="form-group" style="flex:1"><label>入住日期</label><input type="date" id="omCheckIn" /></div>
-        <div class="form-group" style="flex:1"><label>退房日期</label><input type="date" id="omCheckOut" /></div>
       </div>
       <div class="form-group"><label>备注</label><input id="omRemark" placeholder="备注" /></div>
       <div class="modal-actions">
@@ -244,6 +373,7 @@
       <h3 id="roomTypeModalTitle">添加房间类型</h3>
       <div class="form-group"><label>类型名称</label><input id="rtLabel" placeholder="如 标准间" /></div>
       <div class="form-group"><label>基础价格 (元/晚)</label><input type="number" id="rtBasePrice" value="0" /></div>
+      <div class="form-group"><label>默认押金 (元)</label><input type="number" id="rtDeposit" value="0" /></div>
       <div class="form-group"><label>描述</label><input id="rtDesc" placeholder="类型描述" /></div>
       <div class="modal-actions">
         <button class="btn btn-primary" onclick="Admin.saveRoomType()">保存</button>
@@ -252,8 +382,52 @@
     </div>
   </div>
 
+  <div class="modal-overlay hidden" id="verifyModalOverlay">
+    <div class="modal-box">
+      <h3>核验入住</h3>
+      <input type="hidden" id="vmOrderId" />
+      <div class="form-group"><label>订单</label><span id="vmOrderInfo" class="form-value"></span></div>
+      <div class="form-group"><label>押金金额（元）</label><input type="number" id="vmDeposit" value="0" min="0" placeholder="不收取则留 0" /></div>
+      <div class="form-group"><label>备注</label><input id="vmNote" placeholder="核验备注（可选）" /></div>
+      <div class="modal-actions">
+        <button class="btn btn-success" onclick="Admin.confirmVerify()">确认核验</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('verifyModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="collectDepositModalOverlay">
+    <div class="modal-box">
+      <h3>收取押金</h3>
+      <input type="hidden" id="cdOrderId" />
+      <div class="form-group"><label>订单</label><span id="cdOrderInfo" class="form-value"></span></div>
+      <div class="form-group"><label>押金金额（元）</label><input type="number" id="cdAmount" value="0" min="0" /></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="Admin.collectDeposit()">确认收取</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('collectDepositModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="depositModalOverlay">
+    <div class="modal-box">
+      <h3>押金操作</h3>
+      <input type="hidden" id="dpId" />
+      <div class="form-group"><label>用户</label><span id="dpUser" class="form-value"></span></div>
+      <div class="form-group"><label>房间</label><span id="dpRoom" class="form-value"></span></div>
+      <div class="form-group"><label>金额</label><span id="dpAmount" class="form-value"></span></div>
+      <div class="form-group"><label>状态</label><span id="dpStatus" class="form-value"></span></div>
+      <div class="form-group"><label>备注</label><input id="dpRemark" placeholder="退还/扣除原因" /></div>
+      <div class="modal-actions" id="dpActions">
+        <button class="btn btn-success" onclick="Admin.refundDeposit()">退还押金</button>
+        <button class="btn btn-danger" onclick="Admin.forfeitDeposit()">扣除押金</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('depositModalOverlay')">关闭</button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/api.js"></script>
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" integrity="sha384-c9d8RFSL+u3exBOJ4Yp3HUJXS4znl9f+z66d1y54ig+ea249SpqR+w1wyvXz/lk+" crossorigin="anonymous"></script>
   <script src="js/admin.js"></script>
 </body>
 </html>

@@ -14,6 +14,9 @@ const {
   getVerificationByOrder,
   verifyOrder,
   findUserById,
+  getOrdersByUserId,
+  getSystemSetting,
+  createDeposit,
   db,
 } = require('../database');
 
@@ -37,74 +40,63 @@ function userAuth(req, res, next) {
   }
 }
 
-// ---------- 提交预定（创建订单） ----------
+// ---------- 提交预约申请（创建订单，不分配房间） ----------
 router.post('/orders', userAuth, (req, res) => {
-  const { room_type, check_in_date, check_out_date, guest_name, guest_phone, remark } = req.body;
+  const { room_type, guest_name, guest_phone, remark } = req.body;
+
+  // 检查预定开关
+  const bookingOpen = getSystemSetting('booking_open');
+  if (bookingOpen !== '1') {
+    return res.status(403).json({ code: 403, message: '预定暂未开放' });
+  }
 
   // 基本校验
   if (!room_type) return res.status(400).json({ code: 400, message: '请选择房型' });
-  if (!check_in_date || !check_out_date) return res.status(400).json({ code: 400, message: '请选择入住和离店日期' });
   if (!guest_name) return res.status(400).json({ code: 400, message: '请填写入住人姓名' });
 
-  // 查找该房型下一间空闲房间
-  const room = db.prepare(
-    `SELECT * FROM rooms WHERE room_type = ? AND status = 'available' LIMIT 1`
-  ).get(room_type);
-
-  if (!room) {
-    return res.status(400).json({ code: 400, message: '该房型暂无可用房间，请选择其他房型' });
+  // 检查该房型是否存在
+  const typeExists = db.prepare(`SELECT name FROM room_types WHERE name = ?`).get(room_type);
+  if (!typeExists) {
+    return res.status(400).json({ code: 400, message: '所选房型不存在' });
   }
 
-  // 计算总价（天数 × 房间单价）
-  const nights = Math.max(1, Math.ceil((new Date(check_out_date) - new Date(check_in_date)) / 86400000));
-  const total_price = nights * room.price;
-
-  // 创建订单
+  // 创建订单（不分配房间，等待管理员审批）
   const result = createOrder({
     user_id: req.user.id,
     guest_name,
     guest_phone: guest_phone || '',
-    room_id: room.id,
-    check_in_date,
-    check_out_date,
-    total_price,
+    room_id: null,
+    total_price: 0,
     remark: remark || '',
   });
 
-  // 将房间状态改为 reserved
-  updateRoom(room.id, { status: 'reserved' });
+  // 更新 room_type 字段
+  updateOrder(result.lastInsertRowid, { room_type });
 
   res.json({
     code: 200,
-    message: '预定成功',
+    message: '预约申请已提交，请等待管理员审批',
     data: {
       order_id: result.lastInsertRowid,
-      room_number: room.room_number,
-      room_type: room.room_type,
-      check_in_date,
-      check_out_date,
-      total_price,
+      status: 'pending',
     },
   });
 });
 
 // ---------- 获取当前用户的订单列表 ----------
 router.get('/orders', userAuth, (req, res) => {
-  const orders = db.prepare(`
-    SELECT o.*, r.room_number, r.room_type
-    FROM orders o
-    LEFT JOIN rooms r ON o.room_id = r.id
-    WHERE o.user_id = ?
-    ORDER BY o.created_at DESC
-  `).all(req.user.id);
+  const orders = getOrdersByUserId(req.user.id);
   res.json({ code: 200, data: orders });
 });
 
-// ---------- 获取单个订单详情（须属于当前用户） ----------
+// ---------- 获取单个订单详情（须属于当前用户或为入住人） ----------
 router.get('/orders/:id', userAuth, (req, res) => {
   const order = getOrderById(req.params.id);
   if (!order) return res.status(404).json({ code: 404, message: '订单不存在' });
-  if (order.user_id !== req.user.id) {
+  // 检查是否为订单主人或入住人
+  const myOrders = getOrdersByUserId(req.user.id);
+  const hasAccess = myOrders.some(o => o.id === order.id);
+  if (!hasAccess) {
     return res.status(403).json({ code: 403, message: '无权查看' });
   }
   // 附带核验状态
@@ -120,7 +112,7 @@ router.post('/checkin', userAuth, (req, res) => {
     return res.status(403).json({ code: 403, message: '权限不足，仅管理员可执行核验入住' });
   }
 
-  const { order_id } = req.body;
+  const { order_id, deposit_amount } = req.body;
   if (!order_id) return res.status(400).json({ code: 400, message: '订单ID不能为空' });
 
   const order = getOrderById(order_id);
@@ -144,7 +136,18 @@ router.post('/checkin', userAuth, (req, res) => {
     updateRoom(order.room_id, { status: 'occupied' });
   }
 
-  // 4. 创建入住客人记录
+  // 4. 手动收取押金（如果提供了金额且 > 0）
+  if (deposit_amount && parseFloat(deposit_amount) > 0) {
+    createDeposit({
+      order_id: order.id,
+      user_id: order.user_id,
+      room_id: order.room_id || null,
+      amount: parseFloat(deposit_amount),
+      operator_id: req.user.id
+    });
+  }
+
+  // 5. 创建入住客人记录
   createGuest({
     name: order.guest_name,
     phone: order.guest_phone || '',
@@ -160,8 +163,6 @@ router.post('/checkin', userAuth, (req, res) => {
       order_id: order.id,
       guest_name: order.guest_name,
       room_number: order.room_number || '待分配',
-      check_in_date: order.check_in_date,
-      check_out_date: order.check_out_date,
     },
   });
 });

@@ -13,10 +13,21 @@ const {
   updateLoginTime,
   upsertGuestByUserId,
   deleteGuestsByUserId,
+  getSystemSetting,
   db,
 } = require('../database');
 
-const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config');
+const { JWT_SECRET } = require('../config');
+
+/**
+ * 从系统设置读取 JWT 过期时间，默认 480 分钟（8小时）
+ */
+function getTokenExpiry() {
+  const val = getSystemSetting('session_timeout_minutes');
+  const minutes = parseInt(val);
+  if (!minutes || minutes < 1) return '480m';
+  return `${minutes}m`;
+}
 
 const router = express.Router();
 
@@ -78,7 +89,7 @@ router.post('/register', async (req, res) => {
     const token = jwt.sign(
       { id: newUser.id, username },
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN },
+      { expiresIn: getTokenExpiry() },
     );
 
     return res.status(201).json({
@@ -136,7 +147,7 @@ router.post('/admin-login', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, username: user.username, role: 'admin' },
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN },
+      { expiresIn: getTokenExpiry() },
     );
 
     return res.json({
@@ -209,7 +220,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, username: user.username },
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN },
+      { expiresIn: getTokenExpiry() },
     );
 
     return res.json({
@@ -319,7 +330,7 @@ router.put('/profile', async (req, res) => {
 
 /**
  * DELETE /api/auth/account
- * 用户注销账号（级联删除关联 guests 记录）
+ * 用户注销账号（级联删除关联数据）
  */
 router.delete('/account', async (req, res) => {
   try {
@@ -335,7 +346,11 @@ router.delete('/account', async (req, res) => {
       return res.status(404).json({ code: 404, message: '用户不存在' });
     }
 
-    // 级联删除关联的 guests 记录
+    // 级联删除关联数据
+    db.prepare('DELETE FROM order_guests WHERE user_id = ?').run(decoded.id);
+    db.prepare('DELETE FROM deposits WHERE user_id = ?').run(decoded.id);
+    db.prepare('DELETE FROM verifications WHERE verified_by = ?').run(decoded.id);
+    db.prepare('DELETE FROM orders WHERE user_id = ?').run(decoded.id);
     deleteGuestsByUserId(decoded.id);
 
     // 删除用户
@@ -345,6 +360,36 @@ router.delete('/account', async (req, res) => {
   } catch (err) {
     console.error('[注销账号错误]', err);
     return res.status(500).json({ code: 500, message: '服务器内部错误，请稍后重试' });
+  }
+});
+
+/**
+ * POST /api/auth/refresh
+ * 刷新 Token：验证当前 token 有效后签发新 token
+ */
+router.post('/refresh', (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ code: 401, message: '未登录' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const user = findUserById(decoded.id);
+    if (!user) {
+      return res.status(401).json({ code: 401, message: '用户不存在' });
+    }
+
+    // 签发新 token，保持原有 payload 结构
+    const payload = { id: user.id, username: user.username };
+    if (user.role === 'admin') payload.role = 'admin';
+
+    const newToken = jwt.sign(payload, JWT_SECRET, { expiresIn: getTokenExpiry() });
+    return res.json({ code: 200, data: { token: newToken } });
+  } catch (err) {
+    return res.status(401).json({ code: 401, message: 'Token 无效或已过期' });
   }
 });
 

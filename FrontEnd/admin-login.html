@@ -39,12 +39,12 @@
         <button type="submit" class="btn-login" id="loginBtn">登 录</button>
       </form>
 
-      <p class="footer-text">&copy; 2024 FurryHotel 管理后台</p>
+      <p class="footer-text copyright-text">&copy; 2024 FurryHotel 管理后台</p>
     </div>
   </div>
 
   <script>
-    var API = 'http://localhost:3000/api';
+    var API = location.origin + '/api';
 
     // 密码显隐
     document.getElementById('togglePwd').addEventListener('click', function() {
@@ -93,6 +93,16 @@
         btn.textContent = '登 录';
       }
     });
+
+    // ---- 加载网站信息（版权） ----
+    fetch(location.origin + '/api/settings/site-info')
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d.code===200 && d.data && d.data.copyright_text){
+          var el=document.querySelector('.copyright-text');
+          if(el) el.textContent=d.data.copyright_text;
+        }
+      }).catch(function(){});
   </script>
 </body>
 </html>

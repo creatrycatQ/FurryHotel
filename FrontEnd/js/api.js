@@ -1,7 +1,7 @@
 /**
  * API 请求封装
  */
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = window.location.origin + '/api';
 
 const api = {
   /**
@@ -24,7 +24,23 @@ const api = {
     }
 
     const response = await fetch(`${API_BASE}${url}`, options);
+
+    // 防御非 JSON 响应（如反向代理返回 HTML 错误页面）
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return { code: response.status, message: `服务器响应异常 (${response.status})` };
+    }
+
     const json = await response.json();
+
+    // 401 拦截：token 过期或无效时自动跳转登录页（排除 refresh 本身避免死循环）
+    if (response.status === 401 && needAuth && !url.includes('/auth/refresh')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = 'index.html';
+      return json;
+    }
+
     return json;
   },
 
@@ -43,6 +59,11 @@ const api = {
   /** 获取当前用户信息 */
   getMe() {
     return this.request('GET', '/auth/me', null, true);
+  },
+
+  /** 刷新 Token */
+  refreshToken() {
+    return this.request('POST', '/auth/refresh', null, true);
   },
 
   /** 健康检查 */
