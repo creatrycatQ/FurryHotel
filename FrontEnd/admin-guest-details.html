@@ -4,11 +4,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>仪表盘 - FurryEvent 管理后台</title>
+  <title>客人信息 - FurryEvent</title>
   <link rel="stylesheet" href="css/admin.css" />
 </head>
 
-<body data-page="dashboard">
+<body data-page="guestDetails">
 
   <aside class="sidebar" id="sidebar">
     <button class="sidebar-toggle" id="sidebarToggle" title="收起/展开">☰</button>
@@ -50,11 +50,11 @@
       </div>
       <div class="nav-group">
         <a class="nav-item nav-parent" href="javascript:;">
-          <span class="nav-icon">�</span><span class="nav-text">实名管理</span>
+          <span class="nav-icon">👥</span><span class="nav-text">实名管理</span>
           <span class="nav-arrow">▸</span>
         </a>
         <div class="nav-submenu">
-          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名管理</a>
+          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名信息</a>
         </div>
       </div>
       <div class="nav-group">
@@ -96,36 +96,48 @@
   </aside>
 
   <main class="main-content" id="mainContent">
-    <section class="tab-content" id="tab-dashboard">
-      <h1 class="page-title">📊 仪表盘</h1>
-      <div class="stat-grid">
-        <div class="stat-card">
-          <div class="stat-label">剩余门票 / 总席位数</div>
-          <div class="stat-value" id="statRooms">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">实名总数</div>
-          <div class="stat-value" id="statGuests">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">订单总数</div>
-          <div class="stat-value" id="statOrders">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">今日签到</div>
-          <div class="stat-value" id="statTodayCheckIn">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">今日营收</div>
-          <div class="stat-value" id="statRevenue">--</div>
-        </div>
-        <div class="stat-card stat-card-pending" onclick="Admin.gotoPendingOrders()" style="cursor:pointer">
-          <div class="stat-label">待审核订单</div>
-          <div class="stat-value" id="statPendingOrders">--</div>
+    <section class="tab-content" id="tab-guestDetails">
+      <div class="tab-header">
+        <h1 class="page-title">📇 客人信息</h1>
+        <div style="display: flex; gap: 12px;">
+          <button class="btn btn-outline" onclick="Admin.exportToExcel()">📥 导出 Excel</button>
+          <button class="btn btn-primary" onclick="Admin.syncGuestsFromUsers()">🔄 从账号同步/导入</button>
         </div>
       </div>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>姓名</th>
+            <th>账号</th>
+            <th>手机号</th>
+            <th>身份证号</th>
+            <th>购票档次</th>
+            <th>所住房间</th>
+            <th>押金状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="guestDetailsTableBody"></tbody>
+      </table>
     </section>
   </main>
+
+  <div class="modal-overlay hidden" id="guestDetailModalOverlay">
+    <div class="modal-box">
+      <h3 id="guestDetailModalTitle">编辑客人信息</h3>
+      <div class="form-group"><label>真实姓名</label><input id="gdmName" placeholder="真实姓名" /></div>
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1"><label>电话</label><input id="gdmPhone" placeholder="手机号" /></div>
+        <div class="form-group" style="flex:1"><label>身份证</label><input id="gdmIdCard" placeholder="身份证号" /></div>
+      </div>
+      <div class="form-group"><label>分配客房</label><select id="gdmRoomId"><option value="">未分配客房</option></select></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="Admin.saveGuestDetail()">保存</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('guestDetailModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
 
   <script src="js/api.js"></script>
   <script src="js/admin.js"></script>

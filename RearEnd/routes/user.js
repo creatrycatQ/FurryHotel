@@ -42,7 +42,7 @@ function userAuth(req, res, next) {
 
 // ---------- 提交预约申请（创建订单，不分配房间） ----------
 router.post('/orders', userAuth, (req, res) => {
-  const { room_type, guest_name, guest_phone, remark } = req.body;
+  const { room_type, guest_name, guest_phone, remark, guests } = req.body;
 
   // 检查预定开关
   const bookingOpen = getSystemSetting('booking_open');
@@ -53,6 +53,18 @@ router.post('/orders', userAuth, (req, res) => {
   // 基本校验
   if (!room_type) return res.status(400).json({ code: 400, message: '请选择房型' });
   if (!guest_name) return res.status(400).json({ code: 400, message: '请填写入住人姓名' });
+
+  // 检查最大购票张数
+  const ticketsToBuy = parseInt(guests) || 1;
+  const maxTicketsStr = getSystemSetting('max_tickets_per_user') || '1';
+  const maxTickets = parseInt(maxTicketsStr, 10);
+
+  const activeOrders = db.prepare(`SELECT SUM(guests) as total FROM orders WHERE user_id = ? AND status != 'cancelled'`).get(req.user.id);
+  const currentTotal = activeOrders && activeOrders.total ? parseInt(activeOrders.total, 10) : 0;
+
+  if (currentTotal + ticketsToBuy > maxTickets) {
+    return res.status(403).json({ code: 403, message: '已超过购票上限。您最多只能购买 ' + maxTickets + ' 张门票（包含已购）' });
+  }
 
   // 检查该房型是否存在
   const typeExists = db.prepare(`SELECT name FROM room_types WHERE name = ?`).get(room_type);
@@ -68,10 +80,9 @@ router.post('/orders', userAuth, (req, res) => {
     room_id: null,
     total_price: 0,
     remark: remark || '',
+    room_type,
+    guests: ticketsToBuy,
   });
-
-  // 更新 room_type 字段
-  updateOrder(result.lastInsertRowid, { room_type });
 
   res.json({
     code: 200,

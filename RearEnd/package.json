@@ -1,7 +1,7 @@
 {
-  "name": "furry-hotel-backend",
+  "name": "furry-event-backend",
   "version": "1.0.0",
-  "description": "FurryHotel 后端服务 - 注册/登录 API",
+  "description": "FurryEvent 后端服务 - 购票/扫码验票 API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^12.11.1",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.21.0",

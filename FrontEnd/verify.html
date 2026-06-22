@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f59e0b" />
-  <title>FurryHotel - 在线核验</title>
+  <title>FurryEvent - 在线核验</title>
   <link rel="stylesheet" href="css/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js" integrity="sha384-HGmnkDZJy7mRkoARekrrj0VjEFSh9a0Z8qxGri/kTTAJkgR8hqD1lHsYSh3JdzRi" crossorigin="anonymous"></script>
   <style>
@@ -75,9 +75,9 @@
 <body>
 
   <div class="logo-area" style="padding-top:24px;">
-    <span class="logo-icon">✅</span>
-    <h1 class="logo-title">在线核验</h1>
-    <p class="logo-sub">出示二维码，前台扫码即可入住</p>
+    <span class="logo-icon">🎫</span>
+    <h1 class="logo-title">电子门票</h1>
+    <p class="logo-sub">出示二维码，现场扫码即可验票入场</p>
   </div>
 
   <div class="order-list">
@@ -108,7 +108,7 @@
 
         const orders = res.data;
         if (!orders || orders.length === 0) {
-          container.innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>暂无订单</p></div>`;
+          container.innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>暂无门票</p></div>`;
           return;
         }
 
@@ -120,22 +120,30 @@
           const statusClass = `status-${order.status}`;
           const statusText = App.getStatusText(order.status);
 
+          let roomDisplay = '';
+          if (order.is_room_package === 0) {
+            roomDisplay = '仅限门票 (无物理客房)';
+          } else {
+            roomDisplay = order.room_number ? (order.room_number + '号房 (' + (order.room_type_label || order.room_type || '') + ')') : '待分配客房 (' + (order.room_type_label || order.room_type || '') + ')';
+          }
+
           card.innerHTML = `
             <div class="order-header">
               <span class="order-id">订单 #${order.id}</span>
               <span class="order-status ${statusClass}">${esc(statusText)}</span>
             </div>
             <div class="order-info">
-              👤 入住人：<span>${esc(order.guest_name)}</span><br/>
-              🏨 房间：<span>${esc(order.room_number || '待分配')} ${esc(order.room_type_label || order.room_type || '')}</span>
+              👤 持票人：<span>${esc(order.guest_name)}</span><br/>
+              🎫 席位：<span>${esc(roomDisplay)}</span>
             </div>
-            ${(order.status === 'pending' || order.status === 'approved') ? '<div class="qr-area"><canvas id="qr-' + order.id + '"></canvas><div class="qr-hint">请让前台扫描此二维码完成入住</div></div>' : ''}
-            ${(order.status === 'confirmed' || order.status === 'checked_in') ? '<div class="qr-area" style="background:#d1fae5;"><div class="qr-hint" style="color:#065f46;font-weight:600;">✅ 已完成核验入住</div></div>' : ''}
+            ${(order.status === 'pending') ? '<div class="qr-area" style="background:#fafaf9;border:1.5px dashed var(--border);"><div class="qr-hint" style="color:var(--text-secondary);font-weight:600;margin-top:0;">⏳ 订单正在审核中，审核通过后显示门票二维码</div></div>' : ''}
+            ${(order.status === 'approved') ? '<div class="qr-area"><canvas id="qr-' + order.id + '"></canvas><div class="qr-hint">请向工作人员出示此二维码核销入场</div></div>' : ''}
+            ${(order.status === 'confirmed' || order.status === 'checked_in') ? '<div class="qr-area" style="background:#d1fae5;"><div class="qr-hint" style="color:#065f46;font-weight:600;">✅ 已验票入场</div></div>' : ''}
           `;
           container.appendChild(card);
 
-          // Generate QR code for active orders
-          if (order.status === 'pending' || order.status === 'approved') {
+          // Generate QR code for approved orders
+          if (order.status === 'approved') {
             const qrData = JSON.stringify({ type: 'furry_checkin', order_id: order.id });
             QRCode.toCanvas(document.getElementById(`qr-${order.id}`), qrData, {
               width: 180,

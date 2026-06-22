@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f59e0b" />
-  <title>剩余房间 - FurryHotel</title>
+  <title>门票席位 - FurryEvent</title>
   <link rel="stylesheet" href="css/style.css" />
   <style>
     .type-item {
@@ -45,9 +45,9 @@
 <body>
 
   <div class="logo-area">
-    <span class="logo-icon">🏨</span>
-    <h1 class="logo-title">剩余房间</h1>
-    <p class="logo-sub">查看各房型可预订房间</p>
+    <span class="logo-icon">🎫</span>
+    <h1 class="logo-title">门票预售</h1>
+    <p class="logo-sub">查看各票档剩余门票及座位</p>
   </div>
 
   <div class="card">
@@ -55,7 +55,7 @@
       <div style="text-align:center;padding:24px 0;color:#a8a29e;font-size:14px;">加载中…</div>
     </div>
 
-    <button type="button" class="btn btn-primary" id="bookBtn" onclick="location.href='reserve.html'" style="margin-top:16px;">立即预定</button>
+    <button type="button" class="btn btn-primary" id="bookBtn" style="margin-top:16px;">立即购票</button>
     <button type="button" class="btn" onclick="location.href='home.html'" style="margin-top:10px;background:#e7e5e4;color:#44403c;width:100%;">返回首页</button>
   </div>
 
@@ -64,7 +64,7 @@
   <script>
     if (!App.requireAuth()) {}
 
-    // 检查预定开关
+    // 检查预定开关与绑定购票事件
     (function checkBookingStatus() {
       fetch('/api/settings/booking-status')
         .then(function(r) { return r.json(); })
@@ -72,10 +72,13 @@
           var btn = document.getElementById('bookBtn');
           if (res.code === 200 && res.data && !res.data.open) {
             btn.disabled = true;
-            btn.textContent = '预定暂未开放';
+            btn.textContent = '购票暂未开放';
             btn.style.opacity = '0.5';
             btn.style.cursor = 'not-allowed';
-            btn.onclick = null;
+          } else {
+            btn.addEventListener('click', function() {
+              location.href = 'tickets.html';
+            });
           }
         })
         .catch(function() {});
@@ -92,7 +95,7 @@
         var roomsRes = results[1];
 
         if (typesRes.code !== 200 || !typesRes.data || !typesRes.data.length) {
-          container.innerHTML = '<div style="text-align:center;padding:24px 0;color:#a8a29e;">暂无房型信息</div>';
+          container.innerHTML = '<div style="text-align:center;padding:24px 0;color:#a8a29e;">暂无票档及座位信息</div>';
           return;
         }
 
@@ -102,10 +105,18 @@
         // 按房型分组
         var grouped = {};
         types.forEach(function(t) { grouped[t.name] = []; });
+        
+        // 获取所有套票关联的物理客房房型，避免重复展示
+        var hotelRoomTypes = types.map(function(t) { return t.hotelRoomType; }).filter(Boolean);
+
         rooms.forEach(function(r) {
           if (grouped[r.room_type]) {
             grouped[r.room_type].push(r);
           } else {
+            // 如果该房间属于已被住宿套餐绑定的物理客房，不需要在“其他”中重复展示
+            if (hotelRoomTypes.indexOf(r.room_type) !== -1) {
+              return;
+            }
             // 房间类型不在 room_types 中，用 type_label 归为"其他"
             if (!grouped['__other__']) grouped['__other__'] = [];
             grouped['__other__'].push(r);
@@ -114,28 +125,35 @@
 
         var html = '';
         types.forEach(function(t) {
-          var list = grouped[t.name] || [];
           var count = t.available;
           var hasRoom = count > 0;
+          var typeLabelNote = t.isRoomPackage ? ' <span style="font-size:12px;font-weight:normal;padding:2px 6px;background:#e8f5e9;color:#2e7d32;border-radius:4px;vertical-align:middle;margin-left:6px;">包含住宿</span>' : ' <span style="font-size:12px;font-weight:normal;padding:2px 6px;background:#efebe9;color:#4e342e;border-radius:4px;vertical-align:middle;margin-left:6px;">仅限门票</span>';
 
           html += '<div class="type-item">';
           html += '<div class="type-info">';
-          html += '<div class="type-name">' + esc(t.label) + '</div>';
-          html += '<div class="type-meta"><span class="price">¥' + (t.basePrice || 0) + '</span> /晚</div>';
+          html += '<div class="type-name">' + esc(t.label) + typeLabelNote + '</div>';
+          html += '<div class="type-meta"><span class="price">¥' + (t.basePrice || 0) + '</span></div>';
           if (t.description) html += '<div class="type-desc">' + esc(t.description) + '</div>';
           html += '</div>';
-          html += '<span class="type-badge ' + (hasRoom ? 'has-room' : 'no-room') + '">剩余 ' + count + '</span>';
+          html += '<span class="type-badge ' + (hasRoom ? 'has-room' : 'no-room') + '">' + (t.isRoomPackage ? '剩余 ' + count + ' 间' : '剩余 ' + count + ' 张') + '</span>';
           html += '</div>';
 
-          // 展开房间列表
-          if (list.length > 0) {
-            html += '<div class="room-expand">';
-            list.forEach(function(r) {
-              html += '<span class="room-chip">' + esc(r.room_number) + ' <span class="floor">' + r.floor + 'F · ¥' + r.price + '</span></span>';
-            });
-            html += '</div>';
-          } else if (!hasRoom) {
-            html += '<div class="room-expand"><span class="no-room-text">该房型暂无空房</span></div>';
+          // 仅在包含住宿时展开客房列表
+          if (t.isRoomPackage) {
+            var matchedRooms = rooms.filter(function(r) { return r.room_type === t.hotelRoomType; });
+            if (matchedRooms.length > 0) {
+              html += '<div class="room-expand">';
+              matchedRooms.forEach(function(r) {
+                html += '<span class="room-chip">' + esc(r.room_number) + ' <span class="floor">' + r.floor + '区 · ¥' + r.price + '</span></span>';
+              });
+              html += '</div>';
+            } else {
+              html += '<div class="room-expand"><span class="no-room-text">暂无可用空闲客房</span></div>';
+            }
+          } else {
+            if (!hasRoom) {
+              html += '<div class="room-expand"><span class="no-room-text">该票档门票已售罄</span></div>';
+            }
           }
         });
 
@@ -148,7 +166,7 @@
           html += '</div>';
           html += '<div class="room-expand">';
           otherList.forEach(function(r) {
-            html += '<span class="room-chip">' + esc(r.room_number) + ' <span class="floor">' + r.floor + 'F · ¥' + r.price + '</span></span>';
+            html += '<span class="room-chip">' + esc(r.room_number) + ' <span class="floor">' + r.floor + '区 · ¥' + r.price + '</span></span>';
           });
           html += '</div>';
         }

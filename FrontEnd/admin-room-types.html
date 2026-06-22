@@ -1,14 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>仪表盘 - FurryEvent 管理后台</title>
+  <title>票务套餐管理 - FurryEvent</title>
   <link rel="stylesheet" href="css/admin.css" />
 </head>
-
-<body data-page="dashboard">
+<body data-page="roomTypes">
 
   <aside class="sidebar" id="sidebar">
     <button class="sidebar-toggle" id="sidebarToggle" title="收起/展开">☰</button>
@@ -50,11 +48,11 @@
       </div>
       <div class="nav-group">
         <a class="nav-item nav-parent" href="javascript:;">
-          <span class="nav-icon">�</span><span class="nav-text">实名管理</span>
+          <span class="nav-icon">👥</span><span class="nav-text">实名管理</span>
           <span class="nav-arrow">▸</span>
         </a>
         <div class="nav-submenu">
-          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名管理</a>
+          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名信息</a>
         </div>
       </div>
       <div class="nav-group">
@@ -96,39 +94,53 @@
   </aside>
 
   <main class="main-content" id="mainContent">
-    <section class="tab-content" id="tab-dashboard">
-      <h1 class="page-title">📊 仪表盘</h1>
-      <div class="stat-grid">
-        <div class="stat-card">
-          <div class="stat-label">剩余门票 / 总席位数</div>
-          <div class="stat-value" id="statRooms">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">实名总数</div>
-          <div class="stat-value" id="statGuests">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">订单总数</div>
-          <div class="stat-value" id="statOrders">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">今日签到</div>
-          <div class="stat-value" id="statTodayCheckIn">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">今日营收</div>
-          <div class="stat-value" id="statRevenue">--</div>
-        </div>
-        <div class="stat-card stat-card-pending" onclick="Admin.gotoPendingOrders()" style="cursor:pointer">
-          <div class="stat-label">待审核订单</div>
-          <div class="stat-value" id="statPendingOrders">--</div>
-        </div>
+    <section class="tab-content" id="tab-roomTypes">
+      <div class="tab-header">
+        <h1 class="page-title">🎫 票务套餐/票档</h1>
+        <button class="btn btn-primary" onclick="showRoomTypeModal()">+ 添加套票</button>
       </div>
+      <table class="data-table">
+        <thead><tr><th>套餐名称</th><th>是否含住宿</th><th>价格</th><th>描述</th><th>操作</th></tr></thead>
+        <tbody id="roomTypeTableBody"></tbody>
+      </table>
     </section>
   </main>
+
+  <div class="modal-overlay hidden" id="roomTypeModalOverlay">
+    <div class="modal-box">
+      <h3 id="roomTypeModalTitle">添加票务套餐</h3>
+      <div class="form-group"><label>套票名称</label><input id="rtLabel" placeholder="如 单日门票+标准大床房" /></div>
+      <div class="form-group"><label>套餐价格 (元)</label><input type="number" id="rtBasePrice" value="0" /></div>
+      
+      <div class="form-group" style="margin: 12px 0;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal;">
+          <input type="checkbox" id="rtIsRoomPackage" onchange="Admin.toggleRoomPackageEdit(this.checked)" style="width:auto;margin:0;" />
+          <span>包含客房住宿</span>
+        </label>
+      </div>
+      
+      <div class="form-group id-room-package-only hidden" id="rtRoomTypeGroup">
+        <label>关联酒店房型</label>
+        <select id="rtHotelRoomType" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px">
+          <option value="">加载中...</option>
+        </select>
+      </div>
+
+      <div class="form-group id-ticket-only-only" id="rtStockGroup">
+        <label>门票上限 / 总库存 (张)</label>
+        <input type="number" id="rtStock" value="100" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px" />
+      </div>
+
+      <div class="form-group" style="display:none"><label>默认押金 (元)</label><input type="number" id="rtDeposit" value="0" /></div>
+      <div class="form-group"><label>描述</label><input id="rtDesc" placeholder="套票描述" /></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="Admin.saveRoomType()">保存</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('roomTypeModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
 
   <script src="js/api.js"></script>
   <script src="js/admin.js"></script>
 </body>
-
 </html>

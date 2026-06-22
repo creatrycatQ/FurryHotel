@@ -1,5 +1,5 @@
 /**
- * 管理后台路由：仪表盘 / 房间 / 客人 / 订单 / 核验 / 用户
+ * 管理后台路由：仪表盘 / 门票席位 / 实名信息 / 门票订单 / 验票 / 用户
  */
 
 const express = require('express');
@@ -9,7 +9,7 @@ const bcrypt = require('bcryptjs');
 const {
   getDashboardStats,
   getAllRooms, getRoomById, createRoom, updateRoom, deleteRoom,
-  getAllGuests, getGuestById, createGuest, updateGuest,
+  getAllGuests, getGuestById, createGuest, updateGuest, deleteGuest,
   getAllOrders, getOrderById, createOrder, updateOrder, deleteOrder,
   verifyOrder, getVerificationByOrder,
   getAllUsers, updateUserPassword, updateUserInfo,
@@ -22,6 +22,7 @@ const {
   getSystemSetting, setSystemSetting, getAllSettings,
   createInviteCode, getInviteCodes, updateInviteCodeStatus, deleteInviteCode,
   getPendingUsers, approveUser, rejectUser,
+  getAllHotelRoomTypes, getHotelRoomTypeById, createHotelRoomType, updateHotelRoomType, deleteHotelRoomType,
   db,
 } = require('../database');
 
@@ -60,7 +61,7 @@ router.get('/dashboard', authMiddleware, (req, res) => {
   res.json({ code: 200, data: stats });
 });
 
-// ========== 房间管理 ==========
+// ========== 门票席位管理 ==========
 
 router.get('/rooms', authMiddleware, (req, res) => {
   const rooms = getAllRooms();
@@ -73,19 +74,19 @@ router.get('/rooms', authMiddleware, (req, res) => {
 
 router.get('/rooms/:id', authMiddleware, (req, res) => {
   const room = getRoomById(req.params.id);
-  if (!room) return res.status(404).json({ code: 404, message: '房间不存在' });
+  if (!room) return res.status(404).json({ code: 404, message: '门票席位不存在' });
   res.json({ code: 200, data: room });
 });
 
 router.post('/rooms', authMiddleware, (req, res) => {
   const { room_number, room_type, floor, price, description } = req.body;
-  if (!room_number) return res.status(400).json({ code: 400, message: '房间号不能为空' });
+  if (!room_number) return res.status(400).json({ code: 400, message: '座位号/门票号不能为空' });
   try {
-    const result = createRoom({ room_number, room_type: room_type || 'standard', floor: floor || 1, price: price || 0, description });
+    const result = createRoom({ room_number, room_type: room_type || 'room_standard', floor: floor || 1, price: price || 0, description });
     res.json({ code: 201, message: '添加成功', data: { id: result.lastInsertRowid } });
   } catch (err) {
     if (err.message.includes('UNIQUE')) {
-      return res.status(409).json({ code: 409, message: '该房间号已存在' });
+      return res.status(409).json({ code: 409, message: '该座位号/门票号已存在' });
     }
     throw err;
   }
@@ -101,7 +102,7 @@ router.put('/rooms/:id', authMiddleware, (req, res) => {
   if (status !== undefined) fields.status = status;
   if (description !== undefined) fields.description = description;
 
-  // 退房：将房间设为 available 时，同步完成关联订单并退还押金
+  // 释放：将席位设为 available 时，同步完成关联订单并退还押金
   if (status === 'available') {
     const activeOrders = db.prepare(
       `SELECT id FROM orders WHERE room_id = ? AND status IN ('confirmed', 'checked_in', 'pending', 'approved')`
@@ -111,7 +112,7 @@ router.put('/rooms/:id', authMiddleware, (req, res) => {
       updateOrder(order.id, { status: 'completed' });
       const deposit = getDepositByOrderId(order.id);
       if (deposit && deposit.status === 'collected') {
-        refundDeposit(deposit.id, req.user.id, '退房自动退还');
+        refundDeposit(deposit.id, req.user.id, '释放座位自动退还');
       }
     }
   }
@@ -134,7 +135,7 @@ router.get('/guests', authMiddleware, (req, res) => {
 
 router.get('/guests/:id', authMiddleware, (req, res) => {
   const guest = getVerifiedUserById(req.params.id);
-  if (!guest) return res.status(404).json({ code: 404, message: '客人不存在' });
+  if (!guest) return res.status(404).json({ code: 404, message: '实名用户不存在' });
   res.json({ code: 200, data: guest });
 });
 
@@ -146,6 +147,95 @@ router.put('/guests/:id', authMiddleware, (req, res) => {
   if (id_card !== undefined) fields.id_card = id_card;
   updateUserInfo(req.params.id, fields);
   res.json({ code: 200, message: '更新成功' });
+});
+
+// ========== 客人详情 (入住记录) 管理 ==========
+
+router.get('/hotel-guests', authMiddleware, (req, res) => {
+  const guests = getAllGuests();
+  res.json({ code: 200, data: guests });
+});
+
+router.get('/hotel-guests/:id', authMiddleware, (req, res) => {
+  const guest = getGuestById(req.params.id);
+  if (!guest) return res.status(404).json({ code: 404, message: '客人详情不存在' });
+  res.json({ code: 200, data: guest });
+});
+
+router.put('/hotel-guests/:id', authMiddleware, (req, res) => {
+  const { name, phone, id_card, room_id, check_in, check_out, status } = req.body;
+  const fields = {};
+  if (name !== undefined) fields.name = name;
+  if (phone !== undefined) fields.phone = phone;
+  if (id_card !== undefined) fields.id_card = id_card;
+  if (room_id !== undefined) fields.room_id = room_id;
+  if (check_in !== undefined) fields.check_in = check_in;
+  if (check_out !== undefined) fields.check_out = check_out;
+  if (status !== undefined) fields.status = status;
+  updateGuest(req.params.id, fields);
+  res.json({ code: 200, message: '更新成功' });
+});
+
+router.delete('/hotel-guests/:id', authMiddleware, (req, res) => {
+  deleteGuest(req.params.id);
+  res.json({ code: 200, message: '删除成功' });
+});
+
+router.post('/hotel-guests/sync', authMiddleware, (req, res) => {
+  try {
+    // 1. 获取所有有实名信息的普通用户
+    const verifiedUsers = db.prepare(`
+      SELECT id, real_name, phone, id_card 
+      FROM users 
+      WHERE real_name != '' AND id_card != '' AND role = 'guest'
+    `).all();
+
+    let importedCount = 0;
+    let syncedCount = 0;
+
+    const syncTransaction = db.transaction(() => {
+      for (const u of verifiedUsers) {
+        // 查找此人最新且有房间分配的活跃订单（对应订单管理中的房间号）
+        const activeOrder = db.prepare(`
+          SELECT room_id FROM orders 
+          WHERE user_id = ? AND room_id IS NOT NULL AND status IN ('confirmed', 'checked_in', 'approved', 'pending')
+          ORDER BY created_at DESC 
+          LIMIT 1
+        `).get(u.id);
+        const roomId = activeOrder ? activeOrder.room_id : null;
+
+        // 检查 guests 表中是否存在该 user_id 的记录
+        const existing = db.prepare('SELECT id, name, phone, id_card, room_id FROM guests WHERE user_id = ?').get(u.id);
+        if (!existing) {
+          // 导入：创建一条客人记录，并同步写入房间号
+          db.prepare(`
+            INSERT INTO guests (user_id, name, phone, id_card, room_id, status)
+            VALUES (?, ?, ?, ?, ?, 'checked_in')
+          `).run(u.id, u.real_name, u.phone, u.id_card, roomId);
+          importedCount++;
+        } else {
+          // 同步：如果基本资料或房间号发生变化，则更新
+          if (existing.name !== u.real_name || existing.phone !== u.phone || existing.id_card !== u.id_card || existing.room_id !== roomId) {
+            db.prepare(`
+              UPDATE guests 
+              SET name = ?, phone = ?, id_card = ?, room_id = ?, updated_at = datetime('now','localtime')
+              WHERE id = ?
+            `).run(u.real_name, u.phone, u.id_card, roomId, existing.id);
+            syncedCount++;
+          }
+        }
+      }
+    });
+
+    syncTransaction();
+    res.json({ 
+      code: 200, 
+      message: `同步成功！新导入 ${importedCount} 名客人，更新了 ${syncedCount} 名已存在客人的信息（含所住房间）。` 
+    });
+  } catch (err) {
+    console.error('同步客人信息失败:', err);
+    res.status(500).json({ code: 500, message: '同步失败: ' + err.message });
+  }
 });
 
 // ========== 订单管理 ==========
@@ -163,13 +253,26 @@ router.get('/orders/:id', authMiddleware, (req, res) => {
 });
 
 router.post('/orders', authMiddleware, (req, res) => {
-  const { user_id, guest_name, guest_phone, room_id, total_price, remark, guest_user_ids } = req.body;
-  if (!guest_name) return res.status(400).json({ code: 400, message: '客人姓名不能为空' });
-  const result = createOrder({
+  const { user_id, guest_name, guest_phone, room_id, room_type, total_price, remark, guest_user_ids, guests } = req.body;
+  if (!guest_name) return res.status(400).json({ code: 400, message: '持票人姓名不能为空' });
+
+  const orderData = {
     user_id: user_id || req.user.id,
-    guest_name, guest_phone, room_id, total_price, remark
-  });
+    guest_name,
+    guest_phone,
+    room_id,
+    total_price,
+    remark,
+    guests: guests || (guest_user_ids && guest_user_ids.length ? guest_user_ids.length : 1)
+  };
+
+  if (room_type) {
+    orderData.room_type = room_type;
+  }
+
+  const result = createOrder(orderData);
   const orderId = result.lastInsertRowid;
+
   // 写入入住人员关联
   if (Array.isArray(guest_user_ids) && guest_user_ids.length > 0) {
     setOrderGuests(orderId, guest_user_ids);
@@ -178,15 +281,21 @@ router.post('/orders', authMiddleware, (req, res) => {
 });
 
 router.put('/orders/:id', authMiddleware, (req, res) => {
-  const { guest_name, guest_phone, room_id, total_price, status, remark, user_id, guest_user_ids } = req.body;
+  const { guest_name, guest_phone, room_id, room_type, total_price, status, remark, user_id, guest_user_ids } = req.body;
+
+  const oldOrder = getOrderById(req.params.id);
+  if (!oldOrder) return res.status(404).json({ code: 404, message: '订单不存在' });
+
   const fields = {};
   if (guest_name !== undefined) fields.guest_name = guest_name;
   if (guest_phone !== undefined) fields.guest_phone = guest_phone;
   if (room_id !== undefined) fields.room_id = room_id;
+  if (room_type !== undefined) fields.room_type = room_type;
   if (total_price !== undefined) fields.total_price = total_price;
   if (status !== undefined) fields.status = status;
   if (remark !== undefined) fields.remark = remark;
   if (user_id !== undefined) fields.user_id = user_id;
+
   updateOrder(req.params.id, fields);
 
   // 更新入住人员关联
@@ -194,25 +303,39 @@ router.put('/orders/:id', authMiddleware, (req, res) => {
     setOrderGuests(req.params.id, guest_user_ids);
   }
 
-  // 订单状态变更时同步房间状态
-  if (status !== undefined) {
-    const order = getOrderById(req.params.id);
-    if (order && order.room_id) {
-      if (status === 'confirmed') {
-        updateRoom(order.room_id, { status: 'occupied' });
-      } else if (status === 'cancelled' || status === 'completed') {
-        // 检查该房间是否还有其他活跃订单
-        const activeOrders = db.prepare(
-          `SELECT id FROM orders WHERE room_id = ? AND id != ? AND status IN ('pending', 'approved', 'confirmed')`
-        ).all(order.room_id, order.id);
-        if (activeOrders.length === 0) {
-          updateRoom(order.room_id, { status: 'available' });
-        }
-      } else if (status === 'approved') {
-        updateRoom(order.room_id, { status: 'reserved' });
-      } else if (status === 'pending') {
-        updateRoom(order.room_id, { status: 'reserved' });
+  const newOrder = getOrderById(req.params.id);
+
+  // 1. 如果房间发生变更，同步更新新旧房间的状态
+  if (oldOrder.room_id !== newOrder.room_id) {
+    // 释放旧房
+    if (oldOrder.room_id) {
+      const activeOrdersOld = db.prepare(
+        `SELECT id FROM orders WHERE room_id = ? AND id != ? AND status IN ('pending', 'approved', 'confirmed', 'checked_in')`
+      ).all(oldOrder.room_id, req.params.id);
+      if (activeOrdersOld.length === 0) {
+        updateRoom(oldOrder.room_id, { status: 'available' });
       }
+    }
+    // 占用新房
+    if (newOrder.room_id) {
+      const targetRoomStatus = (newOrder.status === 'confirmed' || newOrder.status === 'checked_in') ? 'occupied' : 'reserved';
+      updateRoom(newOrder.room_id, { status: targetRoomStatus });
+    }
+  }
+
+  // 2. 如果仅仅是订单状态发生变更，同步更新当前房间状态
+  if (status !== undefined && oldOrder.room_id === newOrder.room_id && newOrder.room_id) {
+    if (status === 'confirmed' || status === 'checked_in') {
+      updateRoom(newOrder.room_id, { status: 'occupied' });
+    } else if (status === 'cancelled' || status === 'completed') {
+      const activeOrders = db.prepare(
+        `SELECT id FROM orders WHERE room_id = ? AND id != ? AND status IN ('pending', 'approved', 'confirmed', 'checked_in')`
+      ).all(newOrder.room_id, newOrder.id);
+      if (activeOrders.length === 0) {
+        updateRoom(newOrder.room_id, { status: 'available' });
+      }
+    } else if (status === 'approved' || status === 'pending') {
+      updateRoom(newOrder.room_id, { status: 'reserved' });
     }
   }
 
@@ -372,59 +495,78 @@ router.delete('/users/:id', authMiddleware, (req, res) => {
   res.json({ code: 200, message: '删除成功' });
 });
 
-// ==================== 房间类型管理 ====================
+// ==================== 门票类型管理 ====================
 
-// 获取所有房间类型
+// 获取所有门票套餐类型
 router.get('/room-types', authMiddleware, (req, res) => {
   const list = getAllRoomTypes().map(t => ({
     id: t.id, name: t.name, label: t.label,
     basePrice: t.base_price, defaultDeposit: t.default_deposit || 0,
     description: t.description,
+    isRoomPackage: t.is_room_package === 1,
+    hotelRoomType: t.hotel_room_type,
+    stock: t.stock,
     created_at: t.created_at, updated_at: t.updated_at
   }));
   res.json({ code: 200, data: list });
 });
 
-// 获取单个房间类型
+// 获取单个门票套餐类型
 router.get('/room-types/:id', authMiddleware, (req, res) => {
-  const item = getRoomTypeById(req.params.id);
-  if (!item) return res.status(404).json({ code: 404, message: '房间类型不存在' });
-  res.json({ code: 200, data: {
-    id: item.id, name: item.name, label: item.label,
-    basePrice: item.base_price, defaultDeposit: item.default_deposit || 0,
-    description: item.description,
-    created_at: item.created_at, updated_at: item.updated_at
-  }});
+  try {
+    console.log('[DEBUG] GET /room-types/:id - ID参数:', req.params.id);
+    const item = getRoomTypeById(req.params.id);
+    if (!item) {
+      console.log('[DEBUG] 门票类型不存在，ID:', req.params.id);
+      return res.status(404).json({ code: 404, message: '门票类型不存在' });
+    }
+    res.json({ code: 200, data: {
+      id: item.id, name: item.name, label: item.label,
+      basePrice: item.base_price, defaultDeposit: item.default_deposit || 0,
+      description: item.description,
+      isRoomPackage: item.is_room_package === 1,
+      hotelRoomType: item.hotel_room_type,
+      stock: item.stock,
+      created_at: item.created_at, updated_at: item.updated_at
+    }});
+  } catch (err) {
+    console.error('[ERROR] GET /room-types/:id 失败:', err);
+    res.status(500).json({ code: 500, message: '服务器内部错误: ' + err.message });
+  }
 });
 
-// 新增房间类型
+// 新增门票套餐类型
 router.post('/room-types', authMiddleware, (req, res) => {
-  const { name, label, basePrice, description, defaultDeposit } = req.body;
+  const { name, label, basePrice, description, defaultDeposit, isRoomPackage, hotelRoomType, stock } = req.body;
   const base_price = basePrice;
   const default_deposit = defaultDeposit || 0;
+  const is_room_package = isRoomPackage ? 1 : 0;
+  const stock_val = stock != null ? parseInt(stock) : 100;
   if (!name || base_price == null) {
     return res.status(400).json({ code: 400, message: '名称和基础价格为必填项' });
   }
   try {
-    const result = createRoomType({ name, label, base_price, description, default_deposit });
+    const result = createRoomType({ name, label, base_price, description, default_deposit, is_room_package, hotel_room_type: hotelRoomType || null, stock: stock_val });
     res.json({ code: 200, message: '创建成功', data: { id: result.lastInsertRowid } });
   } catch (err) {
     if (err.message && err.message.includes('UNIQUE')) {
-      return res.status(400).json({ code: 400, message: '房间类型名称已存在' });
+      return res.status(400).json({ code: 400, message: '门票类型名称已存在' });
     }
     res.status(500).json({ code: 500, message: '创建失败' });
   }
 });
 
-// 更新房间类型
+// 更新门票套餐类型
 router.put('/room-types/:id', authMiddleware, (req, res) => {
   const existing = getRoomTypeById(req.params.id);
-  if (!existing) return res.status(404).json({ code: 404, message: '房间类型不存在' });
-  const { name, label, basePrice, description, defaultDeposit } = req.body;
+  if (!existing) return res.status(404).json({ code: 404, message: '门票类型不存在' });
+  const { name, label, basePrice, description, defaultDeposit, isRoomPackage, hotelRoomType, stock } = req.body;
   const base_price = basePrice;
   const default_deposit = defaultDeposit != null ? defaultDeposit : undefined;
+  const is_room_package = isRoomPackage !== undefined ? (isRoomPackage ? 1 : 0) : undefined;
+  const stock_val = stock !== undefined ? parseInt(stock) : undefined;
   try {
-    updateRoomType(req.params.id, { name, label, base_price, description, default_deposit });
+    updateRoomType(req.params.id, { name, label, base_price, description, default_deposit, is_room_package, hotel_room_type: hotelRoomType, stock: stock_val });
     // 若 name 变更，级联更新 rooms 表中引用该类型的记录
     if (name && name !== existing.name) {
       db.prepare('UPDATE rooms SET room_type = ? WHERE room_type = ?').run(name, existing.name);
@@ -432,24 +574,142 @@ router.put('/room-types/:id', authMiddleware, (req, res) => {
     res.json({ code: 200, message: '更新成功' });
   } catch (err) {
     if (err.message && err.message.includes('UNIQUE')) {
-      return res.status(400).json({ code: 400, message: '房间类型名称已存在' });
+      return res.status(400).json({ code: 400, message: '门票类型名称已存在' });
     }
     res.status(500).json({ code: 500, message: '更新失败' });
   }
 });
 
-// 删除房间类型
+// 删除门票套餐类型
 router.delete('/room-types/:id', authMiddleware, (req, res) => {
   const existing = getRoomTypeById(req.params.id);
-  if (!existing) return res.status(404).json({ code: 404, message: '房间类型不存在' });
-  // 检查是否有房间在使用该类型
-  const inUse = db.prepare('SELECT COUNT(*) as c FROM rooms WHERE room_type = ?').get(existing.name);
-  if (inUse && inUse.c > 0) {
-    return res.status(400).json({ code: 400, message: `该类型下仍有 ${inUse.c} 个房间，无法删除` });
+  if (!existing) return res.status(404).json({ code: 404, message: '门票类型不存在' });
+
+  // 检查该类型下是否有座位存在活跃订单（无法删除）
+  const busyRooms = db.prepare(`
+    SELECT r.room_number FROM rooms r
+    WHERE r.room_type = ?
+      AND EXISTS (
+        SELECT 1 FROM orders o
+        WHERE o.room_id = r.id AND o.status IN ('pending', 'approved', 'confirmed', 'checked_in')
+      )
+  `).all(existing.name);
+
+  if (busyRooms.length > 0) {
+    const nums = busyRooms.map(r => r.room_number).join('、');
+    return res.status(400).json({ code: 400, message: `以下座位仍有活跃订单，无法删除：${nums}` });
   }
-  deleteRoomType(req.params.id);
+
+  // 检查是否有任何已存在的订单使用了该门票类型 (通过 room_type 字段关联)
+  const orderCountByRoomType = db.prepare('SELECT COUNT(*) as c FROM orders WHERE room_type = ?').get(existing.name).c;
+
+  if (orderCountByRoomType > 0) {
+    return res.status(400).json({ code: 400, message: `该门票套餐下已有购票订单，无法删除！` });
+  }
+
+  // 级联删除该套餐下所有无活跃订单的座位，最后删除套餐类型
+  const deleteTx = db.transaction(() => {
+    db.prepare(`DELETE FROM rooms WHERE room_type = ?`).run(existing.name);
+    deleteRoomType(req.params.id);
+  });
+  deleteTx();
+
   res.json({ code: 200, message: '删除成功' });
 });
+
+
+// ==================== 酒店客房房型管理 ====================
+
+// 获取所有客房房型
+router.get('/hotel-room-types', authMiddleware, (req, res) => {
+  const list = getAllHotelRoomTypes().map(t => ({
+    id: t.id, name: t.name, label: t.label,
+    basePrice: t.base_price, defaultDeposit: t.default_deposit || 0,
+    capacity: t.capacity || 2, description: t.description,
+    created_at: t.created_at, updated_at: t.updated_at
+  }));
+  res.json({ code: 200, data: list });
+});
+
+// 获取单个客房房型
+router.get('/hotel-room-types/:id', authMiddleware, (req, res) => {
+  const item = getHotelRoomTypeById(req.params.id);
+  if (!item) return res.status(404).json({ code: 404, message: '房型不存在' });
+  res.json({ code: 200, data: {
+    id: item.id, name: item.name, label: item.label,
+    basePrice: item.base_price, defaultDeposit: item.default_deposit || 0,
+    capacity: item.capacity || 2, description: item.description,
+    created_at: item.created_at, updated_at: item.updated_at
+  }});
+});
+
+// 新增客房房型
+router.post('/hotel-room-types', authMiddleware, (req, res) => {
+  const { name, label, basePrice, description, defaultDeposit, capacity } = req.body;
+  if (!name || basePrice == null) {
+    return res.status(400).json({ code: 400, message: '标识和价格为必填项' });
+  }
+  try {
+    const result = createHotelRoomType({ name, label, base_price: basePrice, description, default_deposit: defaultDeposit || 0, capacity: capacity || 2 });
+    res.json({ code: 200, message: '创建成功', data: { id: result.lastInsertRowid } });
+  } catch (err) {
+    if (err.message && err.message.includes('UNIQUE')) {
+      return res.status(400).json({ code: 400, message: '房型标识已存在' });
+    }
+    res.status(500).json({ code: 500, message: '创建失败' });
+  }
+});
+
+// 更新客房房型
+router.put('/hotel-room-types/:id', authMiddleware, (req, res) => {
+  const existing = getHotelRoomTypeById(req.params.id);
+  if (!existing) return res.status(404).json({ code: 404, message: '房型不存在' });
+  const { name, label, basePrice, description, defaultDeposit, capacity } = req.body;
+  try {
+    updateHotelRoomType(req.params.id, { name, label, base_price: basePrice, description, default_deposit: defaultDeposit, capacity });
+    // 若房型标识变更，同步级联更新 rooms 中的 room_type
+    if (name && name !== existing.name) {
+      db.prepare('UPDATE rooms SET room_type = ? WHERE room_type = ?').run(name, existing.name);
+    }
+    res.json({ code: 200, message: '更新成功' });
+  } catch (err) {
+    if (err.message && err.message.includes('UNIQUE')) {
+      return res.status(400).json({ code: 400, message: '房型标识已存在' });
+    }
+    res.status(500).json({ code: 500, message: '更新失败' });
+  }
+});
+
+// 删除客房房型
+router.delete('/hotel-room-types/:id', authMiddleware, (req, res) => {
+  const existing = getHotelRoomTypeById(req.params.id);
+  if (!existing) return res.status(404).json({ code: 404, message: '房型不存在' });
+
+  // 检查该房型下是否有物理客房存在活跃订单
+  const busyRooms = db.prepare(`
+    SELECT r.room_number FROM rooms r
+    WHERE r.room_type = ?
+      AND EXISTS (
+        SELECT 1 FROM orders o
+        WHERE o.room_id = r.id AND o.status IN ('pending', 'approved', 'confirmed', 'checked_in')
+      )
+  `).all(existing.name);
+
+  if (busyRooms.length > 0) {
+    const nums = busyRooms.map(r => r.room_number).join('、');
+    return res.status(400).json({ code: 400, message: `以下客房仍有活跃订单，无法删除：${nums}` });
+  }
+
+  // 级联删除该房型下所有无活跃订单的物理客房，再删除房型
+  const deleteTx = db.transaction(() => {
+    db.prepare(`DELETE FROM rooms WHERE room_type = ?`).run(existing.name);
+    deleteHotelRoomType(req.params.id);
+  });
+  deleteTx();
+
+  res.json({ code: 200, message: '删除成功（已同步清理关联客房）' });
+});
+
 
 // ========== 系统设置 ==========
 
@@ -463,9 +723,9 @@ router.get('/settings', authMiddleware, (req, res) => {
 });
 
 router.put('/settings', authMiddleware, (req, res) => {
-  const { booking_open, session_timeout_minutes, site_title, site_subtitle, copyright_text, registration_mode } = req.body;
+  const { booking_open, session_timeout_minutes, site_title, site_subtitle, copyright_text, registration_mode, max_tickets_per_user } = req.body;
   if (booking_open !== undefined) {
-    setSystemSetting('booking_open', booking_open ? '1' : '0');
+    setSystemSetting('booking_open', (booking_open === '1' || booking_open === 1 || booking_open === true) ? '1' : '0');
   }
   if (session_timeout_minutes !== undefined) {
     const val = parseInt(session_timeout_minutes);
@@ -475,13 +735,13 @@ router.put('/settings', authMiddleware, (req, res) => {
     setSystemSetting('session_timeout_minutes', String(val));
   }
   if (site_title !== undefined) {
-    setSystemSetting('site_title', String(site_title).trim() || 'FurryHotel');
+    setSystemSetting('site_title', String(site_title).trim() || 'FurryEvent 电子售票核销系统');
   }
   if (site_subtitle !== undefined) {
     setSystemSetting('site_subtitle', String(site_subtitle).trim());
   }
   if (copyright_text !== undefined) {
-    setSystemSetting('copyright_text', String(copyright_text).trim() || '© 2024 FurryHotel');
+    setSystemSetting('copyright_text', String(copyright_text).trim() || '© 2026 FurryEvent');
   }
   if (registration_mode !== undefined) {
     const validModes = ['open', 'closed', 'review', 'invite'];
@@ -489,6 +749,13 @@ router.put('/settings', authMiddleware, (req, res) => {
       return res.status(400).json({ code: 400, message: '无效的注册模式' });
     }
     setSystemSetting('registration_mode', registration_mode);
+  }
+  if (max_tickets_per_user !== undefined) {
+    const val = parseInt(max_tickets_per_user);
+    if (isNaN(val) || val < 1) {
+      return res.status(400).json({ code: 400, message: '购票张数上限须大于等于 1' });
+    }
+    setSystemSetting('max_tickets_per_user', String(val));
   }
   res.json({ code: 200, message: '设置已更新' });
 });
@@ -571,41 +838,61 @@ router.post('/orders/:id/approve', authMiddleware, (req, res) => {
   }
 
   const { room_id, note } = req.body || {};
-  let targetRoom;
 
-  if (order.room_id) {
-    // 订单已分配房间（后台手动创建），直接使用已有房间
-    targetRoom = db.prepare('SELECT * FROM rooms WHERE id = ?').get(order.room_id);
+  // 1. 获取对应的门票套餐配置
+  const typeObj = db.prepare('SELECT * FROM room_types WHERE name = ?').get(order.room_type);
+  if (!typeObj) {
+    return res.status(400).json({ code: 400, message: '订单关联的门票票档不存在' });
+  }
+
+  // 2. 确定需要关联的席位/物理客房类型
+  const isRoomPkg = typeObj.is_room_package === 1;
+  const targetType = isRoomPkg ? typeObj.hotel_room_type : typeObj.name;
+
+  // 3. 进行席位分配和容量校验
+  let targetRoom;
+  const targetRoomId = room_id || order.room_id;
+
+  if (targetRoomId) {
+    // 手动指定房间或已分配房间：查出房间、最大容量及除了当前订单外的活跃人数和
+    targetRoom = db.prepare(`
+      SELECT r.*, COALESCE(rt.capacity, 1) as capacity,
+             (SELECT COALESCE(SUM(o.guests), 0) FROM orders o WHERE o.room_id = r.id AND o.status IN ('approved', 'confirmed', 'checked_in', 'pending') AND o.id != ?) as current_occupants
+      FROM rooms r
+      LEFT JOIN hotel_room_types rt ON r.room_type = rt.name
+      WHERE r.id = ?
+    `).get(order.id, targetRoomId);
+
     if (!targetRoom) {
-      return res.status(400).json({ code: 400, message: '订单关联的房间不存在' });
+      return res.status(400).json({ code: 400, message: '指定的席位/客房不存在' });
     }
-  } else if (room_id) {
-    // 手动指定房间
-    targetRoom = db.prepare('SELECT * FROM rooms WHERE id = ?').get(room_id);
-    if (!targetRoom) {
-      return res.status(400).json({ code: 400, message: '指定的房间不存在' });
+    if (targetRoom.room_type !== targetType) {
+      return res.status(400).json({ code: 400, message: `类型不匹配：该套票需要关联「${targetType}」，而选择的是「${targetRoom.room_type}」` });
     }
-    if (targetRoom.status !== 'available') {
-      return res.status(400).json({ code: 400, message: '指定的房间不可用' });
+    if (targetRoom.current_occupants + (order.guests || 1) > targetRoom.capacity) {
+      return res.status(400).json({ code: 400, message: `容量不足：该席位/房间最多容纳 ${targetRoom.capacity}人，当前已预订/入住 ${targetRoom.current_occupants}人，本次订单有 ${order.guests || 1}人` });
     }
   } else {
-    // 自动分配
-    const roomType = order.room_type;
-    if (!roomType) {
-      return res.status(400).json({ code: 400, message: '订单未指定房型，无法自动分配' });
-    }
-    targetRoom = db.prepare(
-      `SELECT * FROM rooms WHERE room_type = ? AND status = 'available' ORDER BY floor, room_number LIMIT 1`
-    ).get(roomType);
+    // 自动分配房间
+    const rooms = db.prepare(`
+      SELECT r.*, COALESCE(rt.capacity, 1) as capacity,
+             (SELECT COALESCE(SUM(o.guests), 0) FROM orders o WHERE o.room_id = r.id AND o.status IN ('approved', 'confirmed', 'checked_in', 'pending')) as current_occupants
+      FROM rooms r
+      LEFT JOIN hotel_room_types rt ON r.room_type = rt.name
+      WHERE r.room_type = ?
+      ORDER BY r.floor, r.room_number
+    `).all(targetType);
+
+    targetRoom = rooms.find(rm => rm.current_occupants + (order.guests || 1) <= rm.capacity);
     if (!targetRoom) {
-      return res.status(400).json({ code: 400, message: `房型「${roomType}」暂无可用房间，无法通过` });
+      return res.status(400).json({ code: 400, message: `类型「${targetType}」下暂无足够可用容量的席位/客房` });
     }
   }
 
-  // 分配房间，确认订单
+  // 更新订单状态和房间状态
   const updateFields = {
     room_id: targetRoom.id,
-    total_price: targetRoom.price,
+    total_price: typeObj.base_price * (order.guests || 1),
     status: 'approved'
   };
   if (note) updateFields.remark = note;
@@ -614,13 +901,12 @@ router.post('/orders/:id/approve', authMiddleware, (req, res) => {
     updateOrder(order.id, updateFields);
     updateRoom(targetRoom.id, { status: 'reserved' });
   });
-
   approveTransaction();
 
   res.json({
     code: 200,
-    message: '审批通过',
-    data: { room_number: targetRoom.room_number, room_id: targetRoom.id, price: targetRoom.price }
+    message: '审批通过，已成功分配房间',
+    data: { room_number: targetRoom.room_number, room_id: targetRoom.id, price: typeObj.base_price * (order.guests || 1) }
   });
 });
 

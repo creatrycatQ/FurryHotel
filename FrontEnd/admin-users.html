@@ -1,14 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>仪表盘 - FurryEvent 管理后台</title>
+  <title>账号管理 - FurryEvent</title>
   <link rel="stylesheet" href="css/admin.css" />
 </head>
-
-<body data-page="dashboard">
+<body data-page="users">
 
   <aside class="sidebar" id="sidebar">
     <button class="sidebar-toggle" id="sidebarToggle" title="收起/展开">☰</button>
@@ -50,11 +48,11 @@
       </div>
       <div class="nav-group">
         <a class="nav-item nav-parent" href="javascript:;">
-          <span class="nav-icon">�</span><span class="nav-text">实名管理</span>
+          <span class="nav-icon">👥</span><span class="nav-text">实名管理</span>
           <span class="nav-arrow">▸</span>
         </a>
         <div class="nav-submenu">
-          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名管理</a>
+          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名信息</a>
         </div>
       </div>
       <div class="nav-group">
@@ -96,39 +94,67 @@
   </aside>
 
   <main class="main-content" id="mainContent">
-    <section class="tab-content" id="tab-dashboard">
-      <h1 class="page-title">📊 仪表盘</h1>
-      <div class="stat-grid">
-        <div class="stat-card">
-          <div class="stat-label">剩余门票 / 总席位数</div>
-          <div class="stat-value" id="statRooms">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">实名总数</div>
-          <div class="stat-value" id="statGuests">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">订单总数</div>
-          <div class="stat-value" id="statOrders">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">今日签到</div>
-          <div class="stat-value" id="statTodayCheckIn">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">今日营收</div>
-          <div class="stat-value" id="statRevenue">--</div>
-        </div>
-        <div class="stat-card stat-card-pending" onclick="Admin.gotoPendingOrders()" style="cursor:pointer">
-          <div class="stat-label">待审核订单</div>
-          <div class="stat-value" id="statPendingOrders">--</div>
-        </div>
+    <section class="tab-content" id="tab-users">
+      <div class="tab-header">
+        <h1 class="page-title">👤 账号管理</h1>
+        <button class="btn btn-primary" onclick="showAddUserModal()">+ 添加账号</button>
       </div>
+      <div id="pendingUsersBar" class="pending-users-bar" style="display:none;margin-bottom:16px;padding:12px 16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;display:flex;align-items:center;gap:12px">
+        <span>⏳ 有 <strong id="pendingUsersCount">0</strong> 个用户等待审核</span>
+        <button class="btn btn-sm btn-primary" onclick="Admin.showPendingUsers()">查看并审核</button>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>用户名</th><th>昵称</th><th>手机</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
+        <tbody id="userTableBody"></tbody>
+      </table>
     </section>
   </main>
+
+  <!-- 修改密码弹窗 -->
+  <div class="modal-overlay hidden" id="passwordModalOverlay">
+    <div class="modal-box">
+      <h3>修改密码</h3>
+      <input type="hidden" id="pwUserId" />
+      <p style="margin-bottom:12px;color:var(--text-secondary)">用户: <strong id="pwUsername"></strong></p>
+      <div class="form-group"><label>新密码</label><input type="password" id="pwNew" placeholder="至少6位" /></div>
+      <div class="form-group"><label>确认密码</label><input type="password" id="pwConfirm" placeholder="再次输入" /></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="Admin.changePassword()">确认修改</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('passwordModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加账号弹窗 -->
+  <div class="modal-overlay hidden" id="addUserModalOverlay">
+    <div class="modal-box">
+      <h3>添加账号</h3>
+      <div class="form-group"><label>用户名</label><input id="auUsername" placeholder="3-20位字母数字下划线" /></div>
+      <div class="form-group"><label>密码</label><input type="password" id="auPassword" placeholder="至少6位" /></div>
+      <div class="form-group"><label>昵称</label><input id="auNickname" placeholder="显示名称" /></div>
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1"><label>手机号</label><input id="auPhone" placeholder="选填" /></div>
+        <div class="form-group" style="flex:1"><label>角色</label><select id="auRole"><option value="guest">普通用户</option><option value="admin">管理员</option></select></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="Admin.createUser()">创建</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('addUserModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 待审核用户弹窗 -->
+  <div class="modal-overlay hidden" id="pendingUsersModalOverlay">
+    <div class="modal-box" style="max-width:600px">
+      <h3>待审核用户</h3>
+      <div id="pendingUsersList" style="max-height:400px;overflow-y:auto"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="Admin.closeModal('pendingUsersModalOverlay')">关闭</button>
+      </div>
+    </div>
+  </div>
 
   <script src="js/api.js"></script>
   <script src="js/admin.js"></script>
 </body>
-
 </html>

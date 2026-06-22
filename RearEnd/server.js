@@ -1,5 +1,5 @@
 /**
- * FurryHotel 后端服务器入口
+ * FurryEvent 后端服务器入口
  * Node.js + Express + SQLite
  */
 
@@ -86,23 +86,49 @@ app.get('/api/room-types', (req, res) => {
   try {
     const { db, getAllRoomTypes } = require('./database');
     const types = getAllRoomTypes();
-    // 查询每种类型的可用房间数
-    const counts = db
+    
+    // 1. 查询物理房间按房型的空闲数量
+    const roomCounts = db
       .prepare(
         `SELECT room_type, COUNT(*) as available
          FROM rooms WHERE status = 'available'
          GROUP BY room_type`
       )
       .all();
-    const countMap = Object.fromEntries(counts.map(r => [r.room_type, r.available]));
-    const result = types.map(t => ({
-      id: t.id,
-      name: t.name,
-      label: t.label || t.name,
-      basePrice: t.base_price,
-      description: t.description || '',
-      available: countMap[t.name] || 0,
-    }));
+    const roomCountMap = Object.fromEntries(roomCounts.map(r => [r.room_type, r.available]));
+
+    // 2. 查询已订购（未退票）的门票订单的张数总和
+    const soldCounts = db
+      .prepare(
+        `SELECT room_type, SUM(guests) as sold
+         FROM orders WHERE status != 'cancelled'
+         GROUP BY room_type`
+      )
+      .all();
+    const soldMap = Object.fromEntries(soldCounts.map(r => [r.room_type, r.sold]));
+
+    const result = types.map(t => {
+      let available = 0;
+      if (t.is_room_package === 1) {
+        // 住宿套票套餐：余量由其绑定的物理房型的可用数量决定
+        available = roomCountMap[t.hotel_room_type] || 0;
+      } else {
+        // 纯门票套餐：由票务总库存减去已售票数决定
+        const sold = soldMap[t.name] || 0;
+        available = Math.max(0, t.stock - sold);
+      }
+      return {
+        id: t.id,
+        name: t.name,
+        label: t.label || t.name,
+        basePrice: t.base_price,
+        description: t.description || '',
+        isRoomPackage: t.is_room_package === 1,
+        hotelRoomType: t.hotel_room_type,
+        stock: t.stock,
+        available: available,
+      };
+    });
     res.json({ code: 200, data: result });
   } catch (err) {
     console.error('获取房间类型失败:', err);
@@ -134,7 +160,8 @@ app.get('/api/settings/booking-status', (req, res) => {
   try {
     const { getSystemSetting } = require('./database');
     const value = getSystemSetting('booking_open');
-    res.json({ code: 200, data: { open: value === '1' } });
+    const maxVal = getSystemSetting('max_tickets_per_user') || '1';
+    res.json({ code: 200, data: { open: value === '1', max_tickets_per_user: parseInt(maxVal) } });
   } catch (err) {
     console.error('获取预定状态失败:', err);
     res.status(500).json({ code: 500, message: '服务器内部错误' });
@@ -158,9 +185,9 @@ app.get('/api/settings/session-timeout', (req, res) => {
 app.get('/api/settings/site-info', (req, res) => {
   try {
     const { getSystemSetting } = require('./database');
-    const site_title = getSystemSetting('site_title') || 'FurryHotel';
-    const site_subtitle = getSystemSetting('site_subtitle') || 'xxx小聚，欢迎参加';
-    const copyright_text = getSystemSetting('copyright_text') || '© 2024 FurryHotel';
+    const site_title = getSystemSetting('site_title') || 'FurryEvent';
+    const site_subtitle = getSystemSetting('site_subtitle') || '大型狂欢沙龙活动，欢迎购票参加';
+    const copyright_text = getSystemSetting('copyright_text') || '© 2026 FurryEvent';
     res.json({ code: 200, data: { site_title, site_subtitle, copyright_text } });
   } catch (err) {
     console.error('获取网站信息失败:', err);
@@ -233,7 +260,7 @@ const server = app.listen(PORT, HOST, () => {
 
   console.log('');
   console.log('========================================');
-  console.log(`  FurryHotel Server Started`);
+  console.log(`  FurryEvent Server Started`);
   console.log(`  ENV: ${process.env.NODE_ENV || 'development'}`);
   console.log('========================================');
   console.log(`  Local:   http://localhost:${PORT}`);

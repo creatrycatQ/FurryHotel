@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f59e0b" />
-  <title>FurryHotel - 扫码核验入住</title>
+  <title>FurryEvent - 扫码签到验票</title>
   <link rel="stylesheet" href="css/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js" integrity="sha384-c9d8RFSL+u3exBOJ4Yp3HUJXS4znl9f+z66d1y54ig+ea249SpqR+w1wyvXz/lk+" crossorigin="anonymous"></script>
   <style>
@@ -97,8 +97,8 @@
 
   <div class="logo-area" style="padding-top:24px;">
     <span class="logo-icon">📷</span>
-    <h1 class="logo-title">扫码核验入住</h1>
-    <p class="logo-sub">扫描住客二维码完成入住登记</p>
+    <h1 class="logo-title">现场扫码验票</h1>
+    <p class="logo-sub">扫描电子门票二维码完成现场入场核销</p>
   </div>
 
   <div class="scan-page">
@@ -106,14 +106,21 @@
 
     <div class="scan-card">
       <div id="scanner-container"></div>
-      <p class="scan-tip">将摄像头对准住客手机上的二维码</p>
+      <p class="scan-tip">将摄像头对准用户手机上的电子票二维码</p>
     </div>
 
     <div class="scan-card">
-      <p style="font-size:14px;font-weight:600;margin-bottom:10px;">手动输入订单号</p>
+      <p style="font-size:14px;font-weight:600;margin-bottom:10px;">核销设置</p>
+      <div class="manual-input">
+        <input type="number" id="globalDeposit" placeholder="押金金额（元，可选）" min="0" />
+      </div>
+    </div>
+
+    <div class="scan-card">
+      <p style="font-size:14px;font-weight:600;margin-bottom:10px;">手动输入门票订单号</p>
       <div class="manual-input">
         <input type="number" id="manualOrderId" placeholder="输入订单ID" />
-        <button id="manualBtn" onclick="manualCheckin()">核验</button>
+        <button id="manualBtn" onclick="manualCheckin()">验票</button>
       </div>
     </div>
 
@@ -168,7 +175,7 @@
       }
 
       if (!orderId) {
-        showResult(false, '无效二维码', '无法识别该二维码内容，请确认是 FurryHotel 订单二维码');
+        showResult(false, '无效二维码', '无法识别该二维码内容，请确认是电子门票二维码');
         return;
       }
 
@@ -187,17 +194,33 @@
 
     async function doCheckin(orderId) {
       try {
-        const res = await api.adminCheckin(orderId);
+        const adminToken = localStorage.getItem('admin_token');
+        if (!adminToken) {
+          showResult(false, '未登录', '请先登录管理员账号');
+          return;
+        }
+
+        const depositInput = document.getElementById('globalDeposit');
+        const depositAmount = depositInput ? parseFloat(depositInput.value) || 0 : 0;
+
+        const response = await fetch(location.origin + '/api/user/checkin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + adminToken
+          },
+          body: JSON.stringify({ order_id: orderId, deposit_amount: depositAmount })
+        });
+        const res = await response.json();
         if (res.code === 200) {
           const d = res.data;
-          showResult(true, '核验入住成功', `
-            👤 入住人：<span>${esc(d.guest_name)}</span><br/>
-            🏨 房间：<span>${esc(d.room_number)}</span><br/>
-            📅 入住：<span>${esc(d.check_in_date)}</span><br/>
-            📅 离店：<span>${esc(d.check_out_date)}</span>
+          showResult(true, '验票入场成功', `
+            👤 持票人：<span>${esc(d.guest_name)}</span><br/>
+            🎫 房间号：<span>${esc(d.room_number || '无')}</span><br/>
+            🔢 订单号：<span>#${esc(d.order_id)}</span>
           `);
         } else {
-          showResult(false, '核验失败', res.message || '未知错误');
+          showResult(false, '验票失败', res.message || '未知错误');
         }
       } catch (err) {
         showResult(false, '网络错误', '请检查网络连接后重试');

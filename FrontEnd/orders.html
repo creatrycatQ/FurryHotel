@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f59e0b" />
-  <title>FurryHotel - 订单记录</title>
+  <title>FurryEvent - 门票记录</title>
   <link rel="stylesheet" href="css/style.css" />
   <style>
     .order-list { width: 100%; max-width: 400px; padding-bottom: 40px; }
@@ -42,9 +42,9 @@
 <body>
 
   <div class="logo-area" style="padding-top:24px;">
-    <span class="logo-icon">📋</span>
-    <h1 class="logo-title">订单记录</h1>
-    <p class="logo-sub">查看您的预定历史</p>
+    <span class="logo-icon">🎫</span>
+    <h1 class="logo-title">我的门票</h1>
+    <p class="logo-sub">查看您的购票及门票信息</p>
   </div>
 
   <div class="order-list">
@@ -73,7 +73,7 @@
 
         var orders = res.data;
         if (!orders || orders.length === 0) {
-          container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无订单</p></div>';
+          container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无门票</p></div>';
           return;
         }
 
@@ -85,14 +85,22 @@
           var statusClass = 'status-' + order.status;
           var statusText = App.getStatusText(order.status);
 
+          var packageAndTier = order.room_type_label || order.room_type || '';
+          var roomDisplay = '';
+          if (order.is_room_package === 0) {
+            roomDisplay = '仅限门票 - ' + packageAndTier;
+          } else {
+            roomDisplay = order.room_number ? (order.room_number + '号房 (' + packageAndTier + ')') : '待分配客房 (' + packageAndTier + ')';
+          }
+
           card.innerHTML = ''
             + '<div class="order-header">'
             +   '<span class="order-id">订单 #' + order.id + '</span>'
             +   '<span class="order-status ' + statusClass + '">' + statusText + '</span>'
             + '</div>'
             + '<div class="order-info">'
-            +   '👤 入住人：<span>' + esc(order.guest_name) + '</span><br/>'
-            +   '🏨 房间：<span>' + esc(order.room_number || '待分配') + ' ' + esc(order.room_type_label || order.room_type || '') + '</span><br/>'
+            +   '👤 持票人：<span>' + esc(order.guest_name) + '</span><br/>'
+            +   '🎫 席位：<span>' + esc(roomDisplay) + '</span><br/>'
             +   '💰 金额：<span>¥' + (order.total_price || 0) + '</span>'
             + '</div>'
             + (order.remark ? '<div class="order-time">📝 ' + esc(order.remark) + '</div>' : '')

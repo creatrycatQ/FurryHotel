@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f59e0b" />
+  <title>购票大厅 - FurryHotel</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* 购票大厅专属样式 */
+    .logo-container {
+      width: 64px;
+      height: 64px;
+      background: #bae6fd;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 12px;
+      border: 2px solid #0284c7;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15);
+    }
+    .logo-container .logo-icon {
+      font-size: 36px;
+      margin-bottom: 0;
+      animation: bounce 2s infinite;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+
+    .nav-back {
+      width: 100%;
+      max-width: 400px;
+      margin: -8px auto 16px;
+      padding: 0 4px;
+      text-align: left;
+    }
+    .nav-back a {
+      font-size: 14px;
+      color: #b45309;
+      text-decoration: none;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: opacity 0.2s;
+    }
+    .nav-back a:hover {
+      opacity: 0.8;
+    }
+
+    /* 横幅样式 */
+    .banners-container {
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto 16px;
+    }
+    .banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      width: 100%;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+    }
+    .banner:last-child {
+      margin-bottom: 0;
+    }
+    .banner-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      line-height: 1;
+      margin-top: 2px;
+    }
+    .banner-content {
+      flex: 1;
+    }
+    .banner-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .banner-desc {
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .banner-warning {
+      background: #fffbeb;
+      border: 1.5px solid #fef08a;
+      color: #854d0e;
+    }
+    .banner-success {
+      background: #f0fdf4;
+      border: 1.5px solid #bbf7d0;
+      color: #166534;
+    }
+    .banner-danger {
+      background: #fef2f2;
+      border: 1.5px solid #fca5a5;
+      color: #991b1b;
+    }
+
+    /* 票型卡片列表 */
+    .tickets-container {
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto 32px;
+    }
+    .ticket-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 16px;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, border-color 0.2s;
+      border: 2px solid transparent;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .ticket-card:active {
+      transform: scale(0.98);
+    }
+    .ticket-card:hover {
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.1);
+      border-color: rgba(245, 158, 11, 0.2);
+    }
+    .ticket-badge {
+      align-self: flex-start;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: #fff;
+    }
+    .ticket-badge.ticket {
+      background: #8b5cf6; /* 紫色 */
+    }
+    .ticket-badge.room {
+      background: #10b981; /* 绿色 */
+    }
+    .ticket-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .ticket-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      line-height: 1.4;
+      min-height: 18px;
+    }
+    .ticket-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-top: 1px solid #f5f5f4;
+      padding-top: 14px;
+    }
+    .ticket-price {
+      font-size: 24px;
+      font-weight: 800;
+      color: #f59e0b;
+      display: flex;
+      align-items: baseline;
+    }
+    .ticket-price::before {
+      content: '¥';
+      font-size: 16px;
+      font-weight: 700;
+      margin-right: 2px;
+    }
+    .ticket-stock {
+      font-size: 12px;
+      color: #10b981;
+      font-weight: 600;
+    }
+    .ticket-stock.low {
+      color: var(--error);
+    }
+    .ticket-stock.empty {
+      color: #a8a29e;
+    }
+
+    /* 现代弹窗 Modal */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+      padding: 16px;
+    }
+    .modal-backdrop.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-card {
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 28px 24px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.15);
+      transform: translateY(20px);
+      transition: transform 0.25s ease;
+      position: relative;
+    }
+    .modal-backdrop.show .modal-card {
+      transform: translateY(0);
+    }
+    .modal-close {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      font-size: 22px;
+      color: #a8a29e;
+      cursor: pointer;
+      background: none;
+      border: none;
+      line-height: 1;
+      padding: 4px;
+      transition: color 0.2s;
+    }
+    .modal-close:hover {
+      color: var(--text);
+    }
+    .modal-header {
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #f5f5f4;
+    }
+    .modal-header .ticket-badge {
+      margin-bottom: 8px;
+    }
+    .modal-header h3 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    
+    .modal-body {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .modal-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .modal-field label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    
+    /* 数量调节器 Stepper */
+    .stepper {
+      display: flex;
+      align-items: center;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      width: 130px;
+      background: #fafaf9;
+    }
+    .stepper-btn {
+      width: 40px;
+      height: 40px;
+      border: none;
+      background: transparent;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .stepper-btn:hover:not(:disabled) {
+      background: #f5f5f4;
+    }
+    .stepper-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .stepper input {
+      flex: 1;
+      width: 100%;
+      height: 40px;
+      border: none;
+      background: transparent;
+      text-align: center;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      outline: none;
+      pointer-events: none;
+    }
+
+    .modal-identity {
+      background: #fef3c7;
+      padding: 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      color: #78716c;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .modal-remark-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      font-size: 14px;
+      background: #fafaf9;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .modal-remark-input:focus {
+      border-color: var(--primary);
+      background: #fff;
+    }
+
+    .modal-price-summary {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      text-align: right;
+      margin-top: 4px;
+    }
+    .modal-price-val {
+      color: var(--primary-dark);
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .modal-status-msg {
+      font-size: 13px;
+      text-align: center;
+      min-height: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 顶部 Logo 区 -->
+  <div class="logo-area">
+    <div class="logo-container">
+      <span class="logo-icon">🎫</span>
+    </div>
+    <h1 class="logo-title">购票大厅</h1>
+    <p class="logo-sub">选择您心仪的票型</p>
+  </div>
+
+  <!-- 返回链接 -->
+  <div class="nav-back">
+    <a href="home.html">← 返回首页</a>
+  </div>
+
+  <!-- 状态横幅区 -->
+  <div class="banners-container" id="bannersContainer">
+    <!-- 横幅加载中 -->
+  </div>
+
+  <!-- 票档卡片容器 -->
+  <div class="tickets-container" id="ticketsContainer">
+    <div style="text-align:center;padding:40px 0;color:#a8a29e;font-size:14px;">加载中…</div>
+  </div>
+
+  <!-- 购票 Modal 弹窗 -->
+  <div class="modal-backdrop" id="bookingModal">
+    <div class="modal-card">
+      <button class="modal-close" id="modalCloseBtn">&times;</button>
+      <div id="modalContent">
+        <div class="modal-header">
+          <div class="ticket-badge" id="modalBadge"></div>
+          <h3 id="modalTitle">--</h3>
+        </div>
+        <div class="modal-body">
+          <!-- 实名信息 -->
+          <div class="modal-field">
+            <label>持票人实名信息</label>
+            <div class="modal-identity" id="modalIdentity">
+              <span>⏳ 正在获取实名信息…</span>
+            </div>
+          </div>
+
+          <!-- 购票数量 -->
+          <div class="modal-field">
+            <label id="modalGuestsLabel">购票张数</label>
+            <div class="stepper">
+              <button type="button" class="stepper-btn" id="stepperMinus">-</button>
+              <input type="number" id="modalGuests" value="1" readonly />
+              <button type="button" class="stepper-btn" id="stepperPlus">+</button>
+            </div>
+          </div>
+
+          <!-- 备注 -->
+          <div class="modal-field">
+            <label for="modalRemark">备注</label>
+            <input type="text" class="modal-remark-input" id="modalRemark" placeholder="如有特殊需求请备注" maxlength="100" />
+          </div>
+
+          <!-- 价格计算 -->
+          <div class="modal-price-summary">
+            订单总价：<span class="modal-price-val" id="modalTotalPrice">¥0</span>
+          </div>
+
+          <!-- 错误状态展示 -->
+          <div class="modal-status-msg" id="modalStatusMsg"></div>
+
+          <!-- 提交按钮 -->
+          <button type="button" class="btn btn-primary" id="modalSubmitBtn">确认购买门票</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    function esc(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    if (!App.requireAuth()) {
+      // 未登录直接拦截
+    }
+
+    // 全局状态
+    var bookingStatus = { open: false, max_tickets_per_user: 1 };
+    var userProfile = { real_name: '', phone: '' };
+    var activePackages = [];
+    var currentSelectedPackage = null;
+
+    // 获取并更新状态横幅
+    function updateBanners() {
+      var container = document.getElementById('bannersContainer');
+      var html = '';
+
+      // 1. 购票通道状态横幅
+      if (!bookingStatus.open) {
+        html += '<div class="banner banner-warning">'
+          + '<span class="banner-icon">🚫</span>'
+          + '<div class="banner-content">'
+          +   '<div class="banner-title">购票通道已关闭</div>'
+          +   '<div class="banner-desc">管理员已暂时关闭购票功能，请稍后再试</div>'
+          + '</div>'
+          + '</div>';
+      }
+
+      // 2. 实名认证状态横幅
+      if (userProfile.real_name) {
+        html += '<div class="banner banner-success">'
+          + '<span class="banner-icon">✅</span>'
+          + '<div class="banner-content">'
+          +   '<div class="banner-title">已完成实名认证</div>'
+          +   '<div class="banner-desc">可正常购买，入住检验更便捷</div>'
+          + '</div>'
+          + '</div>';
+      } else {
+        html += '<div class="banner banner-danger">'
+          + '<span class="banner-icon">⚠️</span>'
+          + '<div class="banner-content">'
+          +   '<div class="banner-title">未完成实名认证</div>'
+          +   '<div class="banner-desc">您尚未完成实名认证，不可购票。'
+          +     '<a href="id-verify.html" style="color:#ef4444;font-weight:700;text-decoration:underline;margin-left:4px;">立即去认证</a>'
+          +   '</div>'
+          + '</div>'
+          + '</div>';
+      }
+
+      container.innerHTML = html;
+    }
+
+    // 初始化数据加载
+    function loadData() {
+      // 1. 获取购票通道和购票上限
+      var p1 = fetch('/api/settings/booking-status')
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.code === 200 && res.data) {
+            bookingStatus = res.data;
+          }
+        }).catch(function(e) { console.error(e); });
+
+      // 2. 获取用户实名信息
+      var p2 = fetch('/api/auth/me', {
+        headers: { 'Authorization': 'Bearer ' + App.getToken() }
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.code === 200 && res.data) {
+          userProfile = res.data;
+        }
+      }).catch(function(e) { console.error(e); });
+
+      // 3. 获取房型票档
+      var p3 = fetch('/api/room-types')
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          var container = document.getElementById('ticketsContainer');
+          if (res.code !== 200 || !res.data || !res.data.length) {
+            container.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--error);font-size:14px;">暂无可用票档</div>';
+            return;
+          }
+          activePackages = res.data;
+          renderTickets(res.data);
+        }).catch(function(e) {
+          document.getElementById('ticketsContainer').innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--error);font-size:14px;">加载失败，请稍后重试</div>';
+        });
+
+      // 所有基本状态加载完毕后更新横幅
+      Promise.all([p1, p2]).then(function() {
+        updateBanners();
+        updateModalIdentity();
+      });
+    }
+
+    // 渲染票型卡片列表
+    function renderTickets(packages) {
+      var container = document.getElementById('ticketsContainer');
+      container.innerHTML = packages.map(function(t) {
+        var isRoom = t.isRoomPackage;
+        var badgeClass = isRoom ? 'room' : 'ticket';
+        var badgeText = isRoom ? '🏨 含住宿' : '🎫 游玩票';
+        var stockClass = '';
+        if (t.available === 0) stockClass = 'empty';
+        else if (t.available < 5) stockClass = 'low';
+
+        return '<div class="ticket-card" onclick="openBooking(\'' + esc(t.name) + '\')">'
+          + '<div class="ticket-badge ' + badgeClass + '">' + badgeText + '</div>'
+          + '<div class="ticket-title">' + esc(t.label) + '</div>'
+          + '<div class="ticket-desc">' + esc(t.description || '暂无描述') + '</div>'
+          + '<div class="ticket-footer">'
+          +   '<div class="ticket-price">' + t.basePrice + '</div>'
+          +   '<div class="ticket-stock ' + stockClass + '">剩余 ' + t.available + '</div>'
+          + '</div>'
+          + '</div>';
+      }).join('');
+    }
+
+    // 更新Modal中的实名展示
+    function updateModalIdentity() {
+      var el = document.getElementById('modalIdentity');
+      var submitBtn = document.getElementById('modalSubmitBtn');
+
+      if (userProfile.real_name) {
+        el.innerHTML = '<span>✅ 持票人：' + esc(userProfile.real_name) + (userProfile.phone ? '　电话：' + esc(userProfile.phone) : '') + '</span>';
+        el.style.background = '#f0fdf4';
+        el.style.color = '#166534';
+        
+        // 只有在购票通道开启的情况下才使按钮可用
+        if (bookingStatus.open) {
+          submitBtn.disabled = false;
+        } else {
+          submitBtn.disabled = true;
+          submitBtn.textContent = '购票通道已关闭';
+        }
+      } else {
+        el.innerHTML = '<span style="color:#ef4444">⚠️ 您尚未完成实名认证，<a href="id-verify.html" style="color:var(--primary);font-weight:700;text-decoration:underline;">去认证</a></span>';
+        el.style.background = '#fef2f2';
+        el.style.color = '#991b1b';
+        submitBtn.disabled = true;
+        submitBtn.textContent = '请先实名认证';
+      }
+    }
+
+    // 打开购票弹窗
+    function openBooking(packageName) {
+      currentSelectedPackage = activePackages.find(function(p) { return p.name === packageName; });
+      if (!currentSelectedPackage) return;
+
+      // 校验购票通道
+      if (!bookingStatus.open) {
+        App.toast('购票通道已关闭，请等待管理员开放。', 'info');
+        return;
+      }
+
+      // 填充数据
+      var isRoom = currentSelectedPackage.isRoomPackage;
+      var modalBadge = document.getElementById('modalBadge');
+      modalBadge.className = 'ticket-badge ' + (isRoom ? 'room' : 'ticket');
+      modalBadge.textContent = isRoom ? '🏨 含住宿' : '🎫 游玩票';
+
+      document.getElementById('modalTitle').textContent = currentSelectedPackage.label;
+      document.getElementById('modalGuests').value = '1';
+      document.getElementById('modalRemark').value = '';
+      document.getElementById('modalStatusMsg').innerHTML = '';
+      
+      // 重置模版表单内容为默认购票视图（防止之前成功视图遗留）
+      document.getElementById('modalContent').style.display = 'block';
+
+      // 调整张数上下限
+      var maxLimit = Math.min(bookingStatus.max_tickets_per_user || 1, currentSelectedPackage.available);
+      var limitLabel = document.getElementById('modalGuestsLabel');
+      limitLabel.innerHTML = '购票张数 <small style="color:var(--text-secondary);font-weight:normal;">(限购 ' + maxLimit + ' 张)</small>';
+
+      updateTotalPrice();
+      updateStepperButtons();
+
+      // 显示弹窗
+      document.getElementById('bookingModal').classList.add('show');
+    }
+
+    // 计算总价
+    function updateTotalPrice() {
+      if (!currentSelectedPackage) return;
+      var count = parseInt(document.getElementById('modalGuests').value) || 1;
+      var total = currentSelectedPackage.basePrice * count;
+      document.getElementById('modalTotalPrice').textContent = '¥' + total;
+    }
+
+    // 步进器按钮状态更新
+    function updateStepperButtons() {
+      if (!currentSelectedPackage) return;
+      var count = parseInt(document.getElementById('modalGuests').value) || 1;
+      var maxLimit = Math.min(bookingStatus.max_tickets_per_user || 1, currentSelectedPackage.available);
+
+      document.getElementById('stepperMinus').disabled = (count <= 1);
+      document.getElementById('stepperPlus').disabled = (count >= maxLimit);
+    }
+
+    // 绑定事件
+    document.getElementById('modalCloseBtn').addEventListener('click', function() {
+      document.getElementById('bookingModal').classList.remove('show');
+    });
+
+    document.getElementById('bookingModal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        this.classList.remove('show');
+      }
+    });
+
+    document.getElementById('stepperMinus').addEventListener('click', function() {
+      var input = document.getElementById('modalGuests');
+      var val = parseInt(input.value) || 1;
+      if (val > 1) {
+        input.value = val - 1;
+        updateTotalPrice();
+        updateStepperButtons();
+      }
+    });
+
+    document.getElementById('stepperPlus').addEventListener('click', function() {
+      if (!currentSelectedPackage) return;
+      var input = document.getElementById('modalGuests');
+      var val = parseInt(input.value) || 1;
+      var maxLimit = Math.min(bookingStatus.max_tickets_per_user || 1, currentSelectedPackage.available);
+      if (val < maxLimit) {
+        input.value = val + 1;
+        updateTotalPrice();
+        updateStepperButtons();
+      }
+    });
+
+    // 提交订单
+    document.getElementById('modalSubmitBtn').addEventListener('click', function() {
+      if (!currentSelectedPackage) return;
+      if (!bookingStatus.open) {
+        document.getElementById('modalStatusMsg').innerHTML = '<span style="color:var(--error)">购票通道已关闭</span>';
+        return;
+      }
+      if (!userProfile.real_name) {
+        document.getElementById('modalStatusMsg').innerHTML = '<span style="color:var(--error)">请先完成实名认证</span>';
+        return;
+      }
+
+      var guests = parseInt(document.getElementById('modalGuests').value) || 1;
+      var remark = document.getElementById('modalRemark').value.trim();
+      var btn = document.getElementById('modalSubmitBtn');
+      var msg = document.getElementById('modalStatusMsg');
+
+      btn.disabled = true;
+      btn.textContent = '提交中…';
+      msg.innerHTML = '';
+
+      var orderData = {
+        room_type: currentSelectedPackage.name,
+        guests: guests,
+        guest_name: userProfile.real_name,
+        guest_phone: userProfile.phone || '',
+        remark: remark
+      };
+
+      fetch('/api/user/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + App.getToken()
+        },
+        body: JSON.stringify(orderData)
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        btn.disabled = false;
+        btn.textContent = '确认购买门票';
+        if (res.code === 200) {
+          var orderId = res.data.order_id;
+          
+          // 显示订购成功视图
+          var contentEl = document.getElementById('modalContent');
+          contentEl.innerHTML = ''
+            + '<div style="text-align:center;padding:20px 0;">'
+            +   '<div style="font-size:48px;margin-bottom:12px;">✅</div>'
+            +   '<h2 style="color:var(--text);margin:0 0 8px;">购票申请已提交</h2>'
+            +   '<p style="font-size:14px;color:var(--text-secondary);margin:0 0 16px;">请等待管理员确认付款并出票</p>'
+            +   '<div style="background:#fef3c7;border-radius:12px;padding:16px;margin-bottom:16px;">'
+            +     '<p style="font-size:15px;font-weight:700;color:var(--text);margin:0;">订单号：#' + orderId + '</p>'
+            +     '<p style="font-size:13px;color:var(--text-secondary);margin:8px 0 0;">当前状态：待确认</p>'
+            +   '</div>'
+            +   '<a href="orders.html" class="btn btn-primary" style="display:inline-block;text-decoration:none;width:100%;margin-bottom:12px;">查看我的门票</a>'
+            +   '<a href="javascript:;" onclick="location.reload()" style="display:inline-block;font-size:14px;color:var(--primary-dark);text-decoration:none;">关闭并刷新</a>'
+            + '</div>';
+        } else {
+          msg.innerHTML = '<span style="color:var(--error)">' + esc(res.message || '提交失败') + '</span>';
+        }
+      })
+      .catch(function() {
+        btn.disabled = false;
+        btn.textContent = '确认购买门票';
+        msg.innerHTML = '<span style="color:var(--error)">网络错误，请稍后重试</span>';
+      });
+    });
+
+    // 首次加载
+    loadData();
+  </script>
+</body>
+</html>

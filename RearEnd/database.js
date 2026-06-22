@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SQLite 数据库初始化和操作模块
  */
 
@@ -126,37 +126,45 @@ db.exec(`
   );
 `);
 
-// ---------- 迁移：从 rooms 表同步已有房间类型到 room_types ----------
-const existingTypes = db.prepare('SELECT COUNT(*) as cnt FROM room_types').get();
-if (existingTypes.cnt === 0) {
-  const types = db.prepare('SELECT DISTINCT room_type FROM rooms').all();
-  const labelMap = { standard: '标准房', deluxe: '豪华房', suite: '套房' };
-  const priceMap = { standard: 288, deluxe: 488, suite: 888 };
-  const insertType = db.prepare('INSERT OR IGNORE INTO room_types (name, label, base_price) VALUES (?, ?, ?)');
-  for (const t of types) {
-    insertType.run(t.room_type, labelMap[t.room_type] || t.room_type, priceMap[t.room_type] || 0);
-  }
-}
+// ---------- 新增 hotel_room_types 表 ----------
+db.exec(`
+  CREATE TABLE IF NOT EXISTS hotel_room_types (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT    NOT NULL UNIQUE,
+    label           TEXT    NOT NULL DEFAULT '',
+    base_price      REAL    NOT NULL DEFAULT 0,
+    description     TEXT    NOT NULL DEFAULT '',
+    default_deposit REAL    NOT NULL DEFAULT 0,
+    capacity        INTEGER NOT NULL DEFAULT 2,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+`);
 
-// ---------- 迁移：为已有 guests 表补充 user_id 列 ----------
-const guestCols = db.prepare("PRAGMA table_info(guests)").all().map(c => c.name);
-if (!guestCols.includes('user_id')) {
-  db.exec("ALTER TABLE guests ADD COLUMN user_id INTEGER REFERENCES users(id)");
+// ---------- 迁移：为 room_types 表补充 is_room_package, hotel_room_type, stock 列 ----------
+const rtColsNew = db.prepare("PRAGMA table_info(room_types)").all().map(c => c.name);
+if (!rtColsNew.includes('is_room_package')) {
+  db.exec("ALTER TABLE room_types ADD COLUMN is_room_package INTEGER NOT NULL DEFAULT 0");
 }
-
-// ---------- 迁移：为 room_types 表补充 default_deposit 列 ----------
-const rtCols = db.prepare("PRAGMA table_info(room_types)").all().map(c => c.name);
-if (!rtCols.includes('default_deposit')) {
+if (!rtColsNew.includes('hotel_room_type')) {
+  db.exec("ALTER TABLE room_types ADD COLUMN hotel_room_type TEXT DEFAULT NULL");
+}
+if (!rtColsNew.includes('stock')) {
+  db.exec("ALTER TABLE room_types ADD COLUMN stock INTEGER NOT NULL DEFAULT 100");
+}
+if (!rtColsNew.includes('default_deposit')) {
   db.exec("ALTER TABLE room_types ADD COLUMN default_deposit REAL NOT NULL DEFAULT 0");
 }
 
-// ---------- 迁移：为 orders 表补充 room_type 列（存储用户申请的房型） ----------
-const orderCols = db.prepare("PRAGMA table_info(orders)").all().map(c => c.name);
-if (!orderCols.includes('room_type')) {
+// ---------- 迁移：为 orders 表补充 guests 列 ----------
+const orderColsNew = db.prepare("PRAGMA table_info(orders)").all().map(c => c.name);
+if (!orderColsNew.includes('guests')) {
+  db.exec("ALTER TABLE orders ADD COLUMN guests INTEGER NOT NULL DEFAULT 1");
+}
+if (!orderColsNew.includes('room_type')) {
   db.exec("ALTER TABLE orders ADD COLUMN room_type TEXT NOT NULL DEFAULT ''");
 }
-// ---------- 迁移：为 orders 表补充 reject_reason 列 ----------
-if (!orderCols.includes('reject_reason')) {
+if (!orderColsNew.includes('reject_reason')) {
   db.exec("ALTER TABLE orders ADD COLUMN reject_reason TEXT NOT NULL DEFAULT ''");
 }
 
@@ -173,17 +181,29 @@ db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('booking_
 // 插入默认设置：会话超时时间（分钟），默认480分钟（8小时）
 db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('session_timeout_minutes', '480')").run();
 // 插入默认设置：网站信息
-db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('site_title', 'FurryHotel')").run();
-db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('site_subtitle', 'xxx小聚，欢迎参加')").run();
-db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('copyright_text', '© 2024 FurryHotel')").run();
+db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('site_title', 'FurryEvent 电子售票核销系统')").run();
+db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('site_subtitle', '大型狂欢沙龙活动，欢迎购票参加')").run();
+db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('copyright_text', '© 2026 FurryEvent')").run();
 // 插入默认设置：注册模式（open/closed/review/invite）
 db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('registration_mode', 'open')").run();
+// 插入默认设置：单人购票上限限制，默认1张
+db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('max_tickets_per_user', '1')").run();
+
+// ---------- 迁移：为已有 guests 表补充 user_id 列 ----------
+const guestCols = db.prepare("PRAGMA table_info(guests)").all().map(c => c.name);
+if (!guestCols.includes('user_id')) {
+  db.exec("ALTER TABLE guests ADD COLUMN user_id INTEGER REFERENCES users(id)");
+}
 
 // ---------- 迁移：为 users 表补充 status 列 ----------
 const userCols2 = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
 if (!userCols2.includes('status')) {
   db.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
 }
+
+// ---------- 迁移已经完成的阶段 ----------
+
+// ---------- 迁移已经完成的阶段，票档预填充已经整合到 database_seeded 检测下 ----------
 
 // ---------- 新增 invite_codes 表 ----------
 db.exec(`
@@ -218,31 +238,64 @@ if (!admin) {
   console.log('║  ⚠️  请登录后立即修改密码！                ║');
   console.log('╚══════════════════════════════════════════╝');
   console.log('');
-
-  // 插入示例房间
-  const rooms = [
-    ['101', 'standard', 1, 288, 'available', '标准大床房，朝南'],
-    ['102', 'standard', 1, 288, 'available', '标准大床房，朝北'],
-    ['201', 'deluxe', 2, 488, 'available', '豪华双床房，带阳台'],
-    ['202', 'deluxe', 2, 488, 'occupied', '豪华双床房，带阳台'],
-    ['301', 'suite', 3, 888, 'available', '行政套房，一室一厅'],
-    ['302', 'suite', 3, 888, 'maintenance', '总统套房，全景落地窗'],
-    ['103', 'standard', 1, 288, 'cleaning', '标准大床房'],
-    ['203', 'deluxe', 2, 488, 'available', '豪华大床房'],
-  ];
-  const insertRoom = db.prepare(`INSERT INTO rooms (room_number, room_type, floor, price, status, description) VALUES (?,?,?,?,?,?)`);
-  for (const r of rooms) {
-    insertRoom.run(...r);
-  }
 }
+
+// ---------- 预填充所有数据库初始数据（仅运行一次） ----------
+const databaseSeeded = db.prepare("SELECT value FROM system_settings WHERE key = 'database_seeded'").get();
+  if (!databaseSeeded || databaseSeeded.value !== '1') {
+    console.log('[INFO] Seeding database preset data...');
+    
+    // 1. 预填充房型到 hotel_room_types
+    const insertHotelType = db.prepare('INSERT OR IGNORE INTO hotel_room_types (name, label, base_price, description, default_deposit, capacity) VALUES (?, ?, ?, ?, ?, ?)');
+    insertHotelType.run('room_standard', '标准大床房', 388, '舒适单人/双人大床，含单人自助早餐', 100, 2);
+    insertHotelType.run('room_deluxe', '豪华双人房', 588, '宽敞双床房，含双人自助早餐', 200, 4);
+
+    // 2. 预填充票务套餐到 room_types
+    db.exec("UPDATE room_types SET is_room_package = 0 WHERE name IN ('standard', 'deluxe', 'suite')");
+    const insertType = db.prepare('INSERT OR IGNORE INTO room_types (name, label, base_price, description, is_room_package, hotel_room_type, stock) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    insertType.run('standard', '单日票', 288, '单日入场门票，普通席', 0, null, 100);
+    insertType.run('deluxe', '双日票', 488, '双日入场门票，普通席（赠送纪念明信片）', 0, null, 50);
+    insertType.run('suite', 'VIP通票', 888, 'VIP全通票，专属前排座位（赠送大礼包+周边）', 0, null, 20);
+    insertType.run('pkg_standard', '单日票+标准房套餐', 588, '单日门票1张 + 标准大床房住宿1晚', 1, 'room_standard', 0);
+    insertType.run('pkg_deluxe', '双日票+豪华房套餐', 988, '双日门票2张 + 豪华双人房住宿1晚', 1, 'room_deluxe', 0);
+
+    // 3. 票档数据预填充已删除
+
+    // 4. 插入示例门票/席位
+    const roomsList = [
+      ['A101', 'standard', 1, 288, 'available', '普通席 A区101座 (单日票)'],
+      ['A102', 'standard', 1, 288, 'available', '普通席 A区102座 (单日票)'],
+      ['B201', 'deluxe', 2, 488, 'available', '普通席 B区201座 (双日票)'],
+      ['B202', 'deluxe', 2, 488, 'available', '普通席 B区202座 (双日票)'],
+      ['V301', 'suite', 3, 888, 'available', 'VIP席 V区301座 (VIP通票)'],
+      ['V302', 'suite', 3, 888, 'available', 'VIP席 V区302座 (VIP通票)'],
+      ['A103', 'standard', 1, 288, 'available', '普通席 A区103座 (单日票)'],
+      ['B203', 'deluxe', 2, 488, 'available', '普通席 B区203座 (双日票)'],
+    ];
+    const insertRoom = db.prepare(`INSERT OR IGNORE INTO rooms (room_number, room_type, floor, price, status, description) VALUES (?,?,?,?,?,?)`);
+    for (const r of roomsList) {
+      insertRoom.run(...r);
+    }
+
+    // 5. 确保存在客房物理数据
+    insertRoom.run('101', 'room_standard', 1, 388, 'available', '标准大床房 - 101号房');
+    insertRoom.run('102', 'room_standard', 1, 388, 'available', '标准大床房 - 102号房');
+    insertRoom.run('201', 'room_deluxe', 2, 588, 'available', '豪华双人房 - 201号房');
+    insertRoom.run('202', 'room_deluxe', 2, 588, 'available', '豪华双人房 - 202号房');
+
+    // 6. 标记为已预填充
+    db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('database_seeded', '1')").run();
+    console.log('[INFO] Database seeding completed.');
+  }
 
 // ---------- 字段白名单（防止 SQL 列名注入） ----------
 const ALLOWED_FIELDS = {
   rooms: ['room_number', 'room_type', 'floor', 'price', 'status', 'description'],
   guests: ['name', 'phone', 'id_card', 'room_id', 'check_in', 'check_out', 'status', 'user_id'],
-  orders: ['guest_name', 'guest_phone', 'room_id', 'total_price', 'status', 'remark', 'room_type', 'reject_reason'],
+  orders: ['guest_name', 'guest_phone', 'room_id', 'total_price', 'status', 'remark', 'room_type', 'reject_reason', 'guests'],
   users: ['nickname', 'phone', 'role', 'real_name', 'id_card', 'avatar', 'status'],
-  room_types: ['name', 'label', 'base_price', 'description', 'default_deposit'],
+  room_types: ['name', 'label', 'base_price', 'description', 'default_deposit', 'is_room_package', 'hotel_room_type', 'stock'],
+  hotel_room_types: ['name', 'label', 'base_price', 'description', 'default_deposit', 'capacity'],
   deposits: ['status', 'remark', 'resolved_at'],
 };
 
@@ -254,7 +307,7 @@ function filterFields(table, fields) {
   if (!allowed) return {};
   const filtered = {};
   for (const [k, v] of Object.entries(fields)) {
-    if (allowed.includes(k)) {
+    if (allowed.includes(k) && v !== undefined) {
       filtered[k] = v;
     }
   }
@@ -327,18 +380,24 @@ function getDashboardStats() {
 // -- 房间管理 --
 function getAllRooms() {
   return db.prepare(`
-    SELECT r.*,
-           u.nickname AS occupant_nickname,
-           u.avatar AS occupant_avatar
+    SELECT r.id, r.room_number, r.room_type, r.floor, r.price, r.status, r.description,
+           rt.label as room_type_label, rt.capacity,
+           COALESCE(SUM(o.guests), 0) as current_occupants
     FROM rooms r
+    LEFT JOIN hotel_room_types rt ON r.room_type = rt.name
     LEFT JOIN orders o ON o.room_id = r.id AND o.status IN ('approved', 'confirmed', 'checked_in', 'pending')
-    LEFT JOIN users u ON u.id = o.user_id
+    GROUP BY r.id
     ORDER BY r.floor, r.room_number
   `).all();
 }
 
 function getRoomById(id) {
-  return db.prepare('SELECT * FROM rooms WHERE id = ?').get(id);
+  return db.prepare(`
+    SELECT r.*, rt.label as room_type_label, rt.capacity
+    FROM rooms r
+    LEFT JOIN hotel_room_types rt ON r.room_type = rt.name
+    WHERE r.id = ?
+  `).get(id);
 }
 
 function createRoom({ room_number, room_type, floor, price, description }) {
@@ -369,7 +428,49 @@ function deleteRoom(id) {
 // -- 客人管理 --
 function getAllGuests() {
   return db.prepare(`
-    SELECT g.*, r.room_number, r.room_type, u.username, u.nickname as user_nickname
+    SELECT g.id, g.user_id, g.room_id, g.check_in, g.check_out, g.status, g.created_at, g.updated_at,
+           r.room_number, r.room_type,
+           u.username, u.nickname as user_nickname,
+           COALESCE(NULLIF(u.real_name, ''), g.name) as name,
+           COALESCE(NULLIF(u.phone, ''), g.phone) as phone,
+           COALESCE(NULLIF(u.id_card, ''), g.id_card) as id_card,
+           COALESCE(
+             (
+               SELECT t.label 
+               FROM orders o 
+               LEFT JOIN room_types t ON o.room_type = t.name 
+               WHERE (g.user_id IS NOT NULL AND o.user_id = g.user_id) 
+                  OR (g.user_id IS NULL AND g.phone != '' AND o.guest_phone = g.phone)
+                  OR (g.user_id IS NULL AND (g.phone = '' OR g.phone IS NULL) AND o.guest_name = g.name)
+               ORDER BY o.created_at DESC 
+               LIMIT 1
+             ),
+             '-'
+           ) as ticket_type_label,
+           (
+             SELECT d.status
+             FROM deposits d
+             LEFT JOIN orders o ON d.order_id = o.id
+             WHERE (g.user_id IS NOT NULL AND d.user_id = g.user_id)
+                OR (g.user_id IS NULL AND o.id IS NOT NULL AND (
+                     (g.phone != '' AND o.guest_phone = g.phone)
+                     OR ((g.phone = '' OR g.phone IS NULL) AND o.guest_name = g.name)
+                   ))
+             ORDER BY d.created_at DESC
+             LIMIT 1
+           ) as deposit_status,
+           (
+             SELECT d.amount
+             FROM deposits d
+             LEFT JOIN orders o ON d.order_id = o.id
+             WHERE (g.user_id IS NOT NULL AND d.user_id = g.user_id)
+                OR (g.user_id IS NULL AND o.id IS NOT NULL AND (
+                     (g.phone != '' AND o.guest_phone = g.phone)
+                     OR ((g.phone = '' OR g.phone IS NULL) AND o.guest_name = g.name)
+                   ))
+             ORDER BY d.created_at DESC
+             LIMIT 1
+           ) as deposit_amount
     FROM guests g
     LEFT JOIN rooms r ON g.room_id = r.id
     LEFT JOIN users u ON g.user_id = u.id
@@ -378,7 +479,15 @@ function getAllGuests() {
 }
 
 function getGuestById(id) {
-  return db.prepare('SELECT * FROM guests WHERE id = ?').get(id);
+  return db.prepare(`
+    SELECT g.id, g.user_id, g.room_id, g.check_in, g.check_out, g.status, g.created_at, g.updated_at,
+           COALESCE(NULLIF(u.real_name, ''), g.name) as name,
+           COALESCE(NULLIF(u.phone, ''), g.phone) as phone,
+           COALESCE(NULLIF(u.id_card, ''), g.id_card) as id_card
+    FROM guests g
+    LEFT JOIN users u ON g.user_id = u.id
+    WHERE g.id = ?
+  `).get(id);
 }
 
 function createGuest({ name, phone, id_card, room_id, check_in, user_id }) {
@@ -407,6 +516,10 @@ function deleteGuestsByUserId(user_id) {
   return db.prepare('DELETE FROM guests WHERE user_id = ?').run(user_id);
 }
 
+function deleteGuest(id) {
+  return db.prepare('DELETE FROM guests WHERE id = ?').run(id);
+}
+
 function updateGuest(id, fields) {
   const safe = filterFields('guests', fields);
   const sets = [];
@@ -424,10 +537,13 @@ function updateGuest(id, fields) {
 // -- 订单管理 --
 function getAllOrders() {
   return db.prepare(`
-    SELECT o.*, r.room_number, r.room_type, u.nickname as user_name,
+    SELECT o.*, r.room_number, COALESCE(r.room_type, o.room_type) as room_type,
+           COALESCE(t.label, r.room_type, o.room_type) as room_type_label,
+           t.is_room_package, u.nickname as user_name,
            d.id as deposit_id, d.amount as deposit_amount, d.status as deposit_status
     FROM orders o
     LEFT JOIN rooms r ON o.room_id = r.id
+    LEFT JOIN room_types t ON (r.room_type = t.name OR o.room_type = t.name)
     LEFT JOIN users u ON o.user_id = u.id
     LEFT JOIN deposits d ON d.order_id = o.id
     ORDER BY o.created_at DESC
@@ -436,18 +552,21 @@ function getAllOrders() {
 
 function getOrderById(id) {
   return db.prepare(`
-    SELECT o.*, r.room_number, r.room_type
-    FROM orders o LEFT JOIN rooms r ON o.room_id = r.id
+    SELECT o.*, r.room_number, COALESCE(r.room_type, o.room_type) as room_type,
+           t.label as room_type_label, t.is_room_package
+    FROM orders o
+    LEFT JOIN rooms r ON o.room_id = r.id
+    LEFT JOIN room_types t ON (r.room_type = t.name OR o.room_type = t.name)
     WHERE o.id = ?
   `).get(id);
 }
 
-function createOrder({ user_id, guest_name, guest_phone, room_id, total_price, remark }) {
-  const stmt = db.prepare(`INSERT INTO orders (user_id, guest_name, guest_phone, room_id, total_price, remark)
-    VALUES (@uid, @gn, @gp, @ri, @tp, @rm)`);
+function createOrder({ user_id, guest_name, guest_phone, room_id, total_price, remark, guests, room_type }) {
+  const stmt = db.prepare(`INSERT INTO orders (user_id, guest_name, guest_phone, room_id, total_price, remark, guests, room_type)
+    VALUES (@uid, @gn, @gp, @ri, @tp, @rm, @gs, @rt)`);
   return stmt.run({
     uid: user_id, gn: guest_name, gp: guest_phone || '', ri: room_id || null,
-    tp: total_price || 0, rm: remark || ''
+    tp: total_price || 0, rm: remark || '', gs: guests || 1, rt: room_type || ''
   });
 }
 
@@ -522,9 +641,13 @@ function getRoomTypeByName(name) {
   return db.prepare('SELECT * FROM room_types WHERE name = ?').get(name);
 }
 
-function createRoomType({ name, label, base_price, description, default_deposit }) {
-  const stmt = db.prepare(`INSERT INTO room_types (name, label, base_price, description, default_deposit) VALUES (@name, @label, @base_price, @description, @default_deposit)`);
-  return stmt.run({ name, label: label || '', base_price: base_price || 0, description: description || '', default_deposit: default_deposit || 0 });
+function createRoomType({ name, label, base_price, description, default_deposit, is_room_package, hotel_room_type, stock }) {
+  const stmt = db.prepare(`INSERT INTO room_types (name, label, base_price, description, default_deposit, is_room_package, hotel_room_type, stock) VALUES (@name, @label, @base_price, @description, @default_deposit, @is_room_package, @hotel_room_type, @stock)`);
+  return stmt.run({
+    name, label: label || '', base_price: base_price || 0, description: description || '',
+    default_deposit: default_deposit || 0, is_room_package: is_room_package || 0,
+    hotel_room_type: hotel_room_type || null, stock: stock || 0
+  });
 }
 
 function updateRoomType(id, fields) {
@@ -565,11 +688,12 @@ function setOrderGuests(order_id, userIds) {
 
 function getOrdersByUserId(user_id) {
   return db.prepare(`
-    SELECT DISTINCT o.*, r.room_number, r.room_type,
-           COALESCE(t.label, r.room_type) as room_type_label
+    SELECT DISTINCT o.*, r.room_number, COALESCE(r.room_type, o.room_type) as room_type,
+           COALESCE(t.label, r.room_type, o.room_type) as room_type_label,
+           t.is_room_package
     FROM orders o
     LEFT JOIN rooms r ON o.room_id = r.id
-    LEFT JOIN room_types t ON r.room_type = t.name
+    LEFT JOIN room_types t ON (r.room_type = t.name OR o.room_type = t.name)
     LEFT JOIN order_guests og ON og.order_id = o.id
     WHERE o.user_id = ? OR og.user_id = ?
     ORDER BY o.created_at DESC
@@ -578,12 +702,19 @@ function getOrdersByUserId(user_id) {
 
 function getRoomOccupants(room_id) {
   return db.prepare(`
-    SELECT DISTINCT u.id, u.nickname, u.real_name, u.avatar
-    FROM orders o
-    JOIN order_guests og ON og.order_id = o.id
-    JOIN users u ON og.user_id = u.id
-    WHERE o.room_id = ? AND o.status IN ('approved', 'confirmed', 'checked_in', 'pending')
-  `).all(room_id);
+    SELECT DISTINCT u.id, u.nickname, u.real_name, u.avatar, u.phone, sub.order_id
+    FROM (
+      SELECT o.user_id as uid, o.id as order_id
+      FROM orders o
+      WHERE o.room_id = ? AND o.status IN ('approved', 'confirmed', 'checked_in', 'pending')
+      UNION
+      SELECT og.user_id as uid, og.order_id as order_id
+      FROM order_guests og
+      JOIN orders o ON og.order_id = o.id
+      WHERE o.room_id = ? AND o.status IN ('approved', 'confirmed', 'checked_in', 'pending')
+    ) sub
+    JOIN users u ON u.id = sub.uid
+  `).all(room_id, room_id);
 }
 
 // -- 已实名客人（从 users 表读取）--
@@ -718,6 +849,45 @@ function rejectUser(id) {
   return db.prepare('DELETE FROM users WHERE id = ?').run(id);
 }
 
+// -- 酒店客房房型管理 --
+function getAllHotelRoomTypes() {
+  return db.prepare('SELECT * FROM hotel_room_types ORDER BY id').all();
+}
+
+function getHotelRoomTypeById(id) {
+  return db.prepare('SELECT * FROM hotel_room_types WHERE id = ?').get(id);
+}
+
+function getHotelRoomTypeByName(name) {
+  return db.prepare('SELECT * FROM hotel_room_types WHERE name = ?').get(name);
+}
+
+function createHotelRoomType({ name, label, base_price, description, default_deposit, capacity }) {
+  const stmt = db.prepare(`INSERT INTO hotel_room_types (name, label, base_price, description, default_deposit, capacity) VALUES (@name, @label, @base_price, @description, @default_deposit, @capacity)`);
+  return stmt.run({
+    name, label: label || '', base_price: base_price || 0, description: description || '',
+    default_deposit: default_deposit || 0, capacity: capacity || 2
+  });
+}
+
+function updateHotelRoomType(id, fields) {
+  const safe = filterFields('hotel_room_types', fields);
+  const sets = [];
+  const vals = {};
+  for (const [k, v] of Object.entries(safe)) {
+    sets.push(`${k} = @${k}`);
+    vals[k] = v;
+  }
+  vals.id = id;
+  if (sets.length === 0) return;
+  sets.push("updated_at = datetime('now','localtime')");
+  return db.prepare(`UPDATE hotel_room_types SET ${sets.join(', ')} WHERE id = @id`).run(vals);
+}
+
+function deleteHotelRoomType(id) {
+  return db.prepare('DELETE FROM hotel_room_types WHERE id = ?').run(id);
+}
+
 module.exports = {
   db,
   findUserByUsername,
@@ -737,6 +907,7 @@ module.exports = {
   getGuestByUserId,
   upsertGuestByUserId,
   deleteGuestsByUserId,
+  deleteGuest,
   getAllOrders,
   getOrderById,
   createOrder,
@@ -778,4 +949,10 @@ module.exports = {
   getPendingUsers,
   approveUser,
   rejectUser,
+  getAllHotelRoomTypes,
+  getHotelRoomTypeById,
+  getHotelRoomTypeByName,
+  createHotelRoomType,
+  updateHotelRoomType,
+  deleteHotelRoomType,
 };

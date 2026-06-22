@@ -1,14 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>仪表盘 - FurryEvent 管理后台</title>
+  <title>在线核验 - FurryEvent</title>
   <link rel="stylesheet" href="css/admin.css" />
 </head>
-
-<body data-page="dashboard">
+<body data-page="verify">
 
   <aside class="sidebar" id="sidebar">
     <button class="sidebar-toggle" id="sidebarToggle" title="收起/展开">☰</button>
@@ -50,11 +48,11 @@
       </div>
       <div class="nav-group">
         <a class="nav-item nav-parent" href="javascript:;">
-          <span class="nav-icon">�</span><span class="nav-text">实名管理</span>
+          <span class="nav-icon">👥</span><span class="nav-text">实名管理</span>
           <span class="nav-arrow">▸</span>
         </a>
         <div class="nav-submenu">
-          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名管理</a>
+          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名信息</a>
         </div>
       </div>
       <div class="nav-group">
@@ -96,39 +94,63 @@
   </aside>
 
   <main class="main-content" id="mainContent">
-    <section class="tab-content" id="tab-dashboard">
-      <h1 class="page-title">📊 仪表盘</h1>
-      <div class="stat-grid">
-        <div class="stat-card">
-          <div class="stat-label">剩余门票 / 总席位数</div>
-          <div class="stat-value" id="statRooms">--</div>
+    <section class="tab-content" id="tab-verify">
+      <div class="tab-header">
+        <h1 class="page-title">✅ 在线核验</h1>
+        <a class="btn btn-primary" href="admin-scan.html" target="_blank" style="text-decoration:none;">📱 移动端扫码入口</a>
+      </div>
+      <div class="verify-box">
+        <div class="verify-tabs">
+          <button class="verify-tab active" onclick="switchVerifyMode('scan')">📷 扫码核验</button>
+          <button class="verify-tab" onclick="switchVerifyMode('file')">📁 拍照识别</button>
+          <button class="verify-tab" onclick="switchVerifyMode('manual')">🔢 手动输入</button>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">实名总数</div>
-          <div class="stat-value" id="statGuests">--</div>
+        <div id="verifyScanArea">
+          <div id="qrReader" style="width:100%;max-width:400px;margin:0 auto"></div>
+          <p class="scan-hint">将二维码或一维码对准摄像头</p>
+          <div style="margin-top:8px;display:flex;gap:8px;justify-content:center">
+            <button class="btn btn-primary" onclick="startScannerManual()" id="btnStartScan">开启摄像头</button>
+            <button class="btn btn-outline" onclick="stopScanner()" style="display:none" id="btnStopScan">关闭摄像头</button>
+          </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">订单总数</div>
-          <div class="stat-value" id="statOrders">--</div>
+        <div id="verifyFileArea" class="hidden">
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">局域网 HTTP 环境下摄像头可能不可用，可通过拍照上传识别二维码</p>
+          <label for="verifyFileInput" style="display:block;padding:24px;border:2px dashed var(--border);border-radius:12px;text-align:center;cursor:pointer;color:var(--text-secondary);font-size:14px;transition:border-color .2s;">
+            📷 点击拍照或选择含二维码的图片
+          </label>
+          <input type="file" id="verifyFileInput" accept="image/*" capture="environment" style="display:none;" />
+          <div id="fileScanContainer" style="display:none;"></div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">今日签到</div>
-          <div class="stat-value" id="statTodayCheckIn">--</div>
+        <div id="verifyManualArea" class="hidden">
+          <div style="display:flex;gap:12px;align-items:flex-end">
+            <div class="form-group" style="flex:1">
+              <label>订单号 / 二维码内容</label>
+              <input type="text" id="verifyOrderId" placeholder="输入订单 ID 或扫码结果" />
+            </div>
+            <button class="btn btn-primary" onclick="doVerifyFromInput()" style="margin-bottom:0">查询核验</button>
+          </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">今日营收</div>
-          <div class="stat-value" id="statRevenue">--</div>
-        </div>
-        <div class="stat-card stat-card-pending" onclick="Admin.gotoPendingOrders()" style="cursor:pointer">
-          <div class="stat-label">待审核订单</div>
-          <div class="stat-value" id="statPendingOrders">--</div>
-        </div>
+        <div id="verifyResult" style="margin-top:16px"></div>
       </div>
     </section>
   </main>
 
+  <div class="modal-overlay hidden" id="verifyModalOverlay">
+    <div class="modal-box">
+      <h3>验票核销</h3>
+      <input type="hidden" id="vmOrderId" />
+      <div class="form-group"><label>订单</label><span id="vmOrderInfo" class="form-value"></span></div>
+      <div class="form-group"><label>押金金额（元）</label><input type="number" id="vmDeposit" value="0" min="0" /></div>
+      <div class="form-group"><label>备注</label><input id="vmNote" placeholder="核销备注（可选）" /></div>
+      <div class="modal-actions">
+        <button class="btn btn-success" onclick="Admin.confirmVerify()">确认核销入场</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('verifyModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/api.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" integrity="sha384-c9d8RFSL+u3exBOJ4Yp3HUJXS4znl9f+z66d1y54ig+ea249SpqR+w1wyvXz/lk+" crossorigin="anonymous"></script>
   <script src="js/admin.js"></script>
 </body>
-
 </html>

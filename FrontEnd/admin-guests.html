@@ -4,11 +4,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>仪表盘 - FurryEvent 管理后台</title>
+  <title>实名信息管理 - FurryEvent</title>
   <link rel="stylesheet" href="css/admin.css" />
 </head>
 
-<body data-page="dashboard">
+<body data-page="guests">
 
   <aside class="sidebar" id="sidebar">
     <button class="sidebar-toggle" id="sidebarToggle" title="收起/展开">☰</button>
@@ -50,11 +50,11 @@
       </div>
       <div class="nav-group">
         <a class="nav-item nav-parent" href="javascript:;">
-          <span class="nav-icon">�</span><span class="nav-text">实名管理</span>
+          <span class="nav-icon">👥</span><span class="nav-text">实名管理</span>
           <span class="nav-arrow">▸</span>
         </a>
         <div class="nav-submenu">
-          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名管理</a>
+          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名信息</a>
         </div>
       </div>
       <div class="nav-group">
@@ -96,36 +96,28 @@
   </aside>
 
   <main class="main-content" id="mainContent">
-    <section class="tab-content" id="tab-dashboard">
-      <h1 class="page-title">📊 仪表盘</h1>
-      <div class="stat-grid">
-        <div class="stat-card">
-          <div class="stat-label">剩余门票 / 总席位数</div>
-          <div class="stat-value" id="statRooms">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">实名总数</div>
-          <div class="stat-value" id="statGuests">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">订单总数</div>
-          <div class="stat-value" id="statOrders">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">今日签到</div>
-          <div class="stat-value" id="statTodayCheckIn">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">今日营收</div>
-          <div class="stat-value" id="statRevenue">--</div>
-        </div>
-        <div class="stat-card stat-card-pending" onclick="Admin.gotoPendingOrders()" style="cursor:pointer">
-          <div class="stat-label">待审核订单</div>
-          <div class="stat-value" id="statPendingOrders">--</div>
-        </div>
+    <section class="tab-content" id="tab-guests">
+      <div class="tab-header">
+        <h1 class="page-title">👥 实名信息</h1>
       </div>
+      <div class="stat-grid" id="guestGrid"></div>
     </section>
   </main>
+
+  <div class="modal-overlay hidden" id="guestModalOverlay">
+    <div class="modal-box">
+      <h3 id="guestModalTitle">编辑实名信息</h3>
+      <div class="form-group"><label>真实姓名</label><input id="gmName" placeholder="真实姓名" /></div>
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1"><label>电话</label><input id="gmPhone" placeholder="手机号" /></div>
+        <div class="form-group" style="flex:1"><label>身份证</label><input id="gmIdCard" placeholder="身份证号" /></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="Admin.saveGuest()">保存</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('guestModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
 
   <script src="js/api.js"></script>
   <script src="js/admin.js"></script>

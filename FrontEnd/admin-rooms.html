@@ -1,14 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>仪表盘 - FurryEvent 管理后台</title>
-  <link rel="stylesheet" href="css/admin.css" />
+  <title>客房房间管理 - FurryEvent</title>
+  <link class="page-style" rel="stylesheet" href="css/admin.css" />
 </head>
-
-<body data-page="dashboard">
+<body data-page="rooms">
 
   <aside class="sidebar" id="sidebar">
     <button class="sidebar-toggle" id="sidebarToggle" title="收起/展开">☰</button>
@@ -50,11 +48,11 @@
       </div>
       <div class="nav-group">
         <a class="nav-item nav-parent" href="javascript:;">
-          <span class="nav-icon">�</span><span class="nav-text">实名管理</span>
+          <span class="nav-icon">👥</span><span class="nav-text">实名管理</span>
           <span class="nav-arrow">▸</span>
         </a>
         <div class="nav-submenu">
-          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名管理</a>
+          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名信息</a>
         </div>
       </div>
       <div class="nav-group">
@@ -96,39 +94,55 @@
   </aside>
 
   <main class="main-content" id="mainContent">
-    <section class="tab-content" id="tab-dashboard">
-      <h1 class="page-title">📊 仪表盘</h1>
-      <div class="stat-grid">
-        <div class="stat-card">
-          <div class="stat-label">剩余门票 / 总席位数</div>
-          <div class="stat-value" id="statRooms">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">实名总数</div>
-          <div class="stat-value" id="statGuests">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">订单总数</div>
-          <div class="stat-value" id="statOrders">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">今日签到</div>
-          <div class="stat-value" id="statTodayCheckIn">--</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">今日营收</div>
-          <div class="stat-value" id="statRevenue">--</div>
-        </div>
-        <div class="stat-card stat-card-pending" onclick="Admin.gotoPendingOrders()" style="cursor:pointer">
-          <div class="stat-label">待审核订单</div>
-          <div class="stat-value" id="statPendingOrders">--</div>
-        </div>
+    <section class="tab-content" id="tab-rooms">
+      <div class="tab-header">
+        <h1 class="page-title">🏨 客房房间管理</h1>
+        <button class="btn btn-primary" onclick="showRoomModal()">+ 添加房间</button>
       </div>
+      <div class="room-grid" id="roomGrid"></div>
     </section>
   </main>
+
+  <div class="modal-overlay hidden" id="roomModalOverlay">
+    <div class="modal-box">
+      <h3 id="roomModalTitle">添加客房房间</h3>
+      <div class="form-group"><label>房间号/房号</label><input id="rmNumber" placeholder="如 101" /></div>
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1"><label>房型</label><select id="rmType"><option value="">加载中...</option></select></div>
+        <div class="form-group" style="flex:1"><label>楼层</label><input type="number" id="rmFloor" value="1" /></div>
+      </div>
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1"><label>价格 (元/间)</label><input type="number" id="rmPrice" value="388" /></div>
+        <div class="form-group" style="flex:1"><label>状态</label><select id="rmStatus"><option value="available">空闲可用</option><option value="occupied">已入住</option><option value="reserved">已预订</option></select></div>
+      </div>
+      <div class="form-group"><label>描述</label><input id="rmDesc" placeholder="房间描述" /></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="Admin.saveRoom()">保存</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('roomModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="transferRoomModalOverlay">
+    <div class="modal-box">
+      <h3>迁移住客房间</h3>
+      <input type="hidden" id="tfOrderId" />
+      <div class="form-group"><label>住客姓名</label><span id="tfGuestName" class="form-value" style="font-weight:bold;color:var(--text)"></span></div>
+      <div class="form-group"><label>当前房号</label><span id="tfCurrentRoom" class="form-value" style="font-weight:bold;color:var(--text-secondary)"></span></div>
+      <div class="form-group">
+        <label>目标物理房间 (仅列出有空闲容量 of 客房)</label>
+        <select id="tfTargetRoom" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px">
+          <option value="">加载中...</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="Admin.confirmTransferRoom()">确认迁移</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('transferRoomModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
 
   <script src="js/api.js"></script>
   <script src="js/admin.js"></script>
 </body>
-
 </html>

@@ -195,12 +195,12 @@ const App = {
    * 订单状态映射
    */
   statusMap: {
-    pending: '待审批',
-    approved: '待入住',
-    confirmed: '已核验',
-    checked_in: '已入住',
-    completed: '已完成',
-    cancelled: '已取消',
+    pending: '待确认',
+    approved: '待核验',
+    confirmed: '已使用',
+    checked_in: '已使用',
+    completed: '已结束',
+    cancelled: '已退票',
   },
 
   /**

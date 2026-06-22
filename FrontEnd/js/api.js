@@ -85,7 +85,7 @@ const api = {
 
   // ---- 管理员核验接口 ----
 
-  /** 扫码核验入住 */
+  /** 扫码验票入场 */
   adminCheckin(orderId) {
     return this.request('POST', '/user/checkin', { order_id: orderId }, true);
   },

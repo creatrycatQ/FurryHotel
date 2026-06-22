@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>订单列表管理 - FurryEvent</title>
+  <link rel="stylesheet" href="css/admin.css" />
+</head>
+<body data-page="orders">
+
+  <aside class="sidebar" id="sidebar">
+    <button class="sidebar-toggle" id="sidebarToggle" title="收起/展开">☰</button>
+    <div class="sidebar-header">
+      <span class="sidebar-logo">🐾</span>
+      <span class="sidebar-title">售票后台</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" data-tab="dashboard" href="admin.html">
+        <span class="nav-icon">📊</span><span class="nav-text">仪表盘</span>
+      </a>
+      <div class="nav-group">
+        <a class="nav-item nav-parent" href="javascript:;">
+          <span class="nav-icon">🎫</span><span class="nav-text">票务管理</span>
+          <span class="nav-arrow">▸</span>
+        </a>
+        <div class="nav-submenu">
+          <a class="nav-sub-item" data-tab="roomTypes" href="admin-room-types.html">票务套餐</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <a class="nav-item nav-parent" href="javascript:;">
+          <span class="nav-icon">🏨</span><span class="nav-text">酒店管理</span>
+          <span class="nav-arrow">▸</span>
+        </a>
+        <div class="nav-submenu">
+          <a class="nav-sub-item" data-tab="hotelRoomTypes" href="admin-hotel-room-types.html">客房房型</a>
+          <a class="nav-sub-item" data-tab="rooms" href="admin-rooms.html">客房房间</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <a class="nav-item nav-parent" href="javascript:;">
+          <span class="nav-icon">📇</span><span class="nav-text">客人信息</span>
+          <span class="nav-arrow">▸</span>
+        </a>
+        <div class="nav-submenu">
+          <a class="nav-sub-item" data-tab="guestDetails" href="admin-guest-details.html">客人详情</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <a class="nav-item nav-parent" href="javascript:;">
+          <span class="nav-icon">👥</span><span class="nav-text">实名管理</span>
+          <span class="nav-arrow">▸</span>
+        </a>
+        <div class="nav-submenu">
+          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名信息</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <a class="nav-item nav-parent" href="javascript:;">
+          <span class="nav-icon">📋</span><span class="nav-text">订单管理</span>
+          <span class="nav-arrow">▸</span>
+        </a>
+        <div class="nav-submenu">
+          <a class="nav-sub-item" data-tab="orders" href="admin-orders.html">订单列表</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <a class="nav-item nav-parent" href="javascript:;">
+          <span class="nav-icon">💰</span><span class="nav-text">押金管理</span>
+          <span class="nav-arrow">▸</span>
+        </a>
+        <div class="nav-submenu">
+          <a class="nav-sub-item" data-tab="deposit" href="admin-deposit.html">用户押金</a>
+        </div>
+      </div>
+
+      <a class="nav-item" data-tab="verify" href="admin-verify.html">
+        <span class="nav-icon">✅</span><span class="nav-text">在线核验</span>
+      </a>
+      <a class="nav-item" data-tab="users" href="admin-users.html">
+        <span class="nav-icon">👤</span><span class="nav-text">账号管理</span>
+      </a>
+      <a class="nav-item" data-tab="inviteCodes" href="admin-invite-codes.html">
+        <span class="nav-icon">🎟️</span><span class="nav-text">邀请码</span>
+      </a>
+      <a class="nav-item" data-tab="settings" href="admin-settings.html">
+        <span class="nav-icon">⚙️</span><span class="nav-text">系统设置</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <span id="sidebarUser">管理员</span>
+      <button class="btn-logout" id="logoutBtn">退出</button>
+    </div>
+  </aside>
+
+  <main class="main-content" id="mainContent">
+    <section class="tab-content" id="tab-orders">
+      <div class="tab-header">
+        <h1 class="page-title">📋 订单管理</h1>
+        <button class="btn btn-primary" onclick="showOrderModal()">+ 新建订单</button>
+      </div>
+      <div class="order-filter-tabs" id="orderFilterTabs">
+        <button class="filter-tab active" data-status="all" onclick="Admin.filterOrders('all')">全部</button>
+        <button class="filter-tab" data-status="pending" onclick="Admin.filterOrders('pending')">待确认 <span class="filter-badge" id="pendingBadge"></span></button>
+        <button class="filter-tab" data-status="approved" onclick="Admin.filterOrders('approved')">已出票</button>
+        <button class="filter-tab" data-status="confirmed" onclick="Admin.filterOrders('confirmed')">已入场</button>
+        <button class="filter-tab" data-status="checked_in" onclick="Admin.filterOrders('checked_in')">已入场</button>
+        <button class="filter-tab" data-status="completed" onclick="Admin.filterOrders('completed')">已结束</button>
+        <button class="filter-tab" data-status="cancelled" onclick="Admin.filterOrders('cancelled')">已退票</button>
+      </div>
+      <table class="data-table"><thead><tr><th>ID</th><th>持票人</th><th>电话</th><th>房间号</th><th>金额</th><th>状态</th><th>操作</th></tr></thead><tbody id="orderTableBody"></tbody></table>
+    </section>
+  </main>
+
+  <!-- 审批订单弹窗 -->
+  <div class="modal-overlay hidden" id="approveModalOverlay">
+    <div class="modal-box">
+      <h3>确认出票</h3>
+      <input type="hidden" id="approveOrderId" />
+      <div class="approve-detail">
+        <div class="approve-row"><span class="approve-label">订单编号</span><span id="approveOrderNo">--</span></div>
+        <div class="approve-row"><span class="approve-label">持票人</span><span id="approveGuest">--</span></div>
+        <div class="approve-row"><span class="approve-label">联系电话</span><span id="approvePhone">--</span></div>
+        <div class="approve-row"><span class="approve-label">申请票档</span><span id="approveRoomType">--</span></div>
+        <div class="approve-row"><span class="approve-label">实付金额</span><span id="approvePrice">--</span></div>
+        <div class="approve-row" id="approveRemarkRow" style="display:none"><span class="approve-label">用户备注</span><span id="approveRemark">--</span></div>
+      </div>
+      <div class="form-group">
+        <label>分配席位/门票号</label>
+        <select id="approveRoomSelect" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px">
+          <option value="">自动分配（系统选择第一个可用席位）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>管理员备注（可选）</label>
+        <input type="text" id="approveNote" placeholder="审批备注" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px" />
+      </div>
+      <div class="form-group reject-area hidden" id="rejectArea">
+        <label>拒绝原因</label>
+        <input type="text" id="rejectReason" placeholder="请填写拒绝原因（可选）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-danger" id="approveRejectBtn" onclick="Admin.showRejectArea()">拒绝</button>
+        <button class="btn btn-primary" id="approveConfirmBtn" onclick="Admin.confirmApprove()">确认出票</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('approveModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="orderModalOverlay">
+    <div class="modal-box">
+      <h3 id="orderModalTitle">新建购票订单</h3>
+      <div class="form-group"><label>持票人（可多选）<span class="user-select-count" id="omUserCount"></span></label>
+        <input class="user-search-input" id="omUserSearch" placeholder="🔍 搜索姓名 / 手机号..." oninput="filterOrderUsers()" />
+        <div class="multi-select-box" id="omUserSelect"></div>
+      </div>
+      <div class="form-group"><label>票务套餐</label>
+        <select id="omRoomType" onchange="Admin.onOrderTypeChange()" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px">
+          <option value="">— 请选择票务套餐 —</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:12px" id="omPriceRoomArea">
+        <div class="form-group" style="flex:1" id="omRoomGroup"><label>分配物理客房</label><select id="omRoomId"><option value="">请选择</option></select></div>
+        <div class="form-group" style="flex:1"><label>票价金额</label><input type="number" id="omPrice" value="0" /></div>
+      </div>
+      <div class="form-group"><label>备注</label><input id="omRemark" placeholder="备注" /></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="Admin.saveOrder()">保存</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('orderModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="collectDepositModalOverlay">
+    <div class="modal-box">
+      <h3>收取押金</h3>
+      <input type="hidden" id="cdOrderId" />
+      <div class="form-group"><label>订单</label><span id="cdOrderInfo" class="form-value"></span></div>
+      <div class="form-group"><label>押金金额（元）</label><input type="number" id="cdAmount" value="0" min="0" /></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="Admin.collectDeposit()">确认收取</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('collectDepositModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
