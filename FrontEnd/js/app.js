@@ -52,6 +52,18 @@ const App = {
   },
 
   /**
+   * 检查是否未登录管理员，未登录则跳转管理员登录页
+   */
+  requireAdminAuth() {
+    const token = localStorage.getItem('admin_token');
+    if (!token) {
+      window.location.href = 'admin-login.html';
+      return false;
+    }
+    return true;
+  },
+
+  /**
    * 退出登录
    */
   logout() {

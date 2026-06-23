@@ -138,7 +138,7 @@
     function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
     // Check admin auth
-    if (!App.requireAuth()) { /* redirect */ }
+    if (!App.requireAdminAuth()) { /* redirect */ }
 
     let html5Scanner = null;
 
@@ -211,6 +211,12 @@
           },
           body: JSON.stringify({ order_id: orderId, deposit_amount: depositAmount })
         });
+        if (response.status === 401) {
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('admin_user');
+          location.href = 'admin-login.html';
+          return;
+        }
         const res = await response.json();
         if (res.code === 200) {
           const d = res.data;
@@ -248,7 +254,9 @@
     }
 
     // Start on page load
-    initScanner();
+    if (localStorage.getItem('admin_token')) {
+      initScanner();
+    }
   </script>
 </body>
 </html>
