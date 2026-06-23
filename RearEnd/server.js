@@ -50,8 +50,29 @@ if (process.env.NODE_ENV === 'production') {
   const accessLogStream = fs.createWriteStream(path.join(logDir, 'access.log'), { flags: 'a' });
   app.use(morgan('combined', { stream: accessLogStream }));
 } else {
-  // 开发环境：输出到控制台
-  app.use(morgan('dev'));
+  // 开发环境：输出到控制台，带时间戳
+  app.use(morgan((tokens, req, res) => {
+    const now = new Date();
+    const timestamp = now.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).replace(/\//g, '-');
+
+    return [
+      `[${timestamp}]`,
+      tokens.method(req, res),
+      tokens.url(req, res),
+      tokens.status(req, res),
+      tokens['response-time'](req, res), 'ms',
+      '-',
+      tokens.res(req, res, 'content-length')
+    ].join(' ');
+  }));
 }
 
 // 登录/注册接口限流（防暴力破解）
