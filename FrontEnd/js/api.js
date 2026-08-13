@@ -18,6 +18,46 @@ function getApiBase() {
 
 const API_BASE = getApiBase();
 
+// 全局自动为 APP / 文件模式注入右上角服务器设置悬浮按钮
+if (typeof document !== 'undefined') {
+  const initServerBadge = () => {
+    if (!document.getElementById('globalServerConfigBadge') && document.body) {
+      const badge = document.createElement('div');
+      badge.id = 'globalServerConfigBadge';
+      badge.style.cssText = 'position:fixed;top:12px;right:12px;z-index:9999;font-family:sans-serif;';
+      badge.innerHTML = `
+        <button style="background:rgba(255,255,255,0.95);border:1.5px solid #f59e0b;color:#d97706;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:bold;box-shadow:0 3px 10px rgba(0,0,0,0.15);cursor:pointer;">
+          ⚙️ 服务器设置
+        </button>
+      `;
+      badge.querySelector('button').addEventListener('click', () => {
+        const current = localStorage.getItem('custom_api_url') || '';
+        const input = prompt('请输入后端服务器地址 (例如 http://192.168.1.100:3000):', current);
+        if (input !== null) {
+          if (input.trim() === '') {
+            localStorage.removeItem('custom_api_url');
+            alert('已重置为默认服务器地址');
+          } else {
+            let url = input.trim();
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+              url = 'http://' + url;
+            }
+            localStorage.setItem('custom_api_url', url);
+            alert('服务器地址已保存为: ' + url);
+          }
+          location.reload();
+        }
+      });
+      document.body.appendChild(badge);
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initServerBadge);
+  } else {
+    initServerBadge();
+  }
+}
+
 const api = {
   /**
    * 发送 HTTP 请求
