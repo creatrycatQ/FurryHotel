@@ -51,8 +51,9 @@
     </form>
 
     <!-- 跳转注册 -->
-    <div class="form-footer">
-      还没有账号？<a href="register.html">立即注册 →</a>
+    <div class="form-footer" style="display:flex;justify-content:space-between;align-items:center;">
+      <span id="registerLinkArea">还没有账号？<a href="register.html">立即注册 →</a></span>
+      <a href="javascript:;" id="serverConfigBtn" style="font-size:12px;color:#f59e0b;text-decoration:none;">⚙️ 服务器设置</a>
     </div>
   </div>
 
@@ -71,14 +72,34 @@
     // ---- 检查注册模式，关闭时隐藏注册链接 ----
     (async function () {
       try {
-        var resp = await fetch(location.origin + '/api/settings/registration-mode');
+        var resp = await fetch(API_BASE + '/settings/registration-mode');
         var data = await resp.json();
         if (data.code === 200 && data.data && data.data.mode === 'closed') {
-          var footer = document.querySelector('.form-footer');
-          if (footer) footer.style.display = 'none';
+          var link = document.getElementById('registerLinkArea');
+          if (link) link.style.display = 'none';
         }
       } catch (e) { }
     })();
+
+    // ---- 服务器地址设置 ----
+    document.getElementById('serverConfigBtn')?.addEventListener('click', () => {
+      const current = localStorage.getItem('custom_api_url') || '';
+      const input = prompt('请输入后端服务器地址 (例如 http://192.168.1.100:3000):', current);
+      if (input !== null) {
+        if (input.trim() === '') {
+          localStorage.removeItem('custom_api_url');
+          App.toast('已重置为默认服务器地址', 'success');
+        } else {
+          let url = input.trim();
+          if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            url = 'http://' + url;
+          }
+          localStorage.setItem('custom_api_url', url);
+          App.toast('服务器地址已保存为: ' + url, 'success');
+        }
+        setTimeout(() => location.reload(), 600);
+      }
+    });
 
     // ---- 密码显隐切换 ----
     const pwdInput = document.getElementById('password');
