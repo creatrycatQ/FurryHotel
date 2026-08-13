@@ -62,6 +62,23 @@
       </a>
     </div>
 
+    <!-- STAFF 专属功能板块 (仅 STAFF / 管理员可见) -->
+    <div class="staff-section" id="staffSection" style="display:none;">
+      <div class="staff-card-header">
+        <span class="staff-badge">⚡ STAFF 工作人员专区</span>
+      </div>
+      <div class="staff-menu-list">
+        <a class="staff-menu-card" href="staff-deposit.html">
+          <div class="staff-menu-icon">💰</div>
+          <div class="staff-menu-text">
+            <div class="staff-menu-title">STAFF 押金管理</div>
+            <div class="staff-menu-desc">查询及申请退还工作人员押金</div>
+          </div>
+          <span class="staff-menu-arrow">›</span>
+        </a>
+      </div>
+    </div>
+
     <!-- 退出按钮 -->
     <button class="btn btn-danger" id="logoutBtn" style="margin-top:24px;">
       退出登录
@@ -113,6 +130,16 @@
       if (user.created_at) {
         document.getElementById('createdAt').textContent =
           '注册于 ' + user.created_at;
+      }
+
+      // 控制 STAFF 专属板块显示：仅当用户角色为 STAFF (或管理员) 时显示
+      const staffSection = document.getElementById('staffSection');
+      if (staffSection) {
+        if (user.role === 'staff' || user.role === 'admin') {
+          staffSection.style.display = 'block';
+        } else {
+          staffSection.style.display = 'none';
+        }
       }
     }
 

@@ -189,6 +189,19 @@ app.get('/api/settings/booking-status', (req, res) => {
   }
 });
 
+// 公开接口：查询 STAFF 押金入口状态（无需登录）
+app.get('/api/settings/staff-deposit-status', (req, res) => {
+  try {
+    const { getSystemSetting } = require('./database');
+    const value = getSystemSetting('staff_deposit_open');
+    const isOpen = value === null || value === undefined ? true : (value === '1');
+    res.json({ code: 200, data: { open: isOpen } });
+  } catch (err) {
+    console.error('获取STAFF押金通道状态失败:', err);
+    res.status(500).json({ code: 500, message: '服务器内部错误' });
+  }
+});
+
 // 公开接口：获取会话超时配置（无需登录，前端启动时拉取）
 app.get('/api/settings/session-timeout', (req, res) => {
   try {

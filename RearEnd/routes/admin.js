@@ -23,37 +23,13 @@ const {
   createInviteCode, getInviteCodes, updateInviteCodeStatus, deleteInviteCode,
   getPendingUsers, approveUser, rejectUser,
   getAllHotelRoomTypes, getHotelRoomTypeById, createHotelRoomType, updateHotelRoomType, deleteHotelRoomType,
+  getAllStaffDeposits, getStaffDepositById, createStaffDeposit, refundStaffDeposit, forfeitStaffDeposit, deleteStaffDeposit,
   db,
 } = require('../database');
 
-const { JWT_SECRET } = require('../config');
-
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const authMiddleware = [authenticateToken, requireAdmin];
 const router = express.Router();
-
-// ---------- 鉴权中间件（需管理员角色） ----------
-function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ code: 401, message: '未登录' });
-  }
-  try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-    // 从数据库获取用户信息并检查角色
-    const user = findUserById(decoded.id);
-    if (!user) {
-      return res.status(401).json({ code: 401, message: '用户不存在' });
-    }
-    if (user.role !== 'admin') {
-      return res.status(403).json({ code: 403, message: '权限不足，仅管理员可访问' });
-    }
-    req.user = decoded;
-    req.user.role = user.role;
-    next();
-  } catch {
-    return res.status(401).json({ code: 401, message: 'Token 无效或已过期' });
-  }
-}
 
 // ---------- 仪表盘 ----------
 router.get('/dashboard', authMiddleware, (req, res) => {
@@ -296,50 +272,58 @@ router.put('/orders/:id', authMiddleware, (req, res) => {
   if (remark !== undefined) fields.remark = remark;
   if (user_id !== undefined) fields.user_id = user_id;
 
-  updateOrder(req.params.id, fields);
+  try {
+    const updateOrderTx = db.transaction(() => {
+      updateOrder(req.params.id, fields);
 
-  // 更新入住人员关联
-  if (Array.isArray(guest_user_ids)) {
-    setOrderGuests(req.params.id, guest_user_ids);
-  }
-
-  const newOrder = getOrderById(req.params.id);
-
-  // 1. 如果房间发生变更，同步更新新旧房间的状态
-  if (oldOrder.room_id !== newOrder.room_id) {
-    // 释放旧房
-    if (oldOrder.room_id) {
-      const activeOrdersOld = db.prepare(
-        `SELECT id FROM orders WHERE room_id = ? AND id != ? AND status IN ('pending', 'approved', 'confirmed', 'checked_in')`
-      ).all(oldOrder.room_id, req.params.id);
-      if (activeOrdersOld.length === 0) {
-        updateRoom(oldOrder.room_id, { status: 'available' });
+      // 更新入住人员关联
+      if (Array.isArray(guest_user_ids)) {
+        setOrderGuests(req.params.id, guest_user_ids);
       }
-    }
-    // 占用新房
-    if (newOrder.room_id) {
-      const targetRoomStatus = (newOrder.status === 'confirmed' || newOrder.status === 'checked_in') ? 'occupied' : 'reserved';
-      updateRoom(newOrder.room_id, { status: targetRoomStatus });
-    }
-  }
 
-  // 2. 如果仅仅是订单状态发生变更，同步更新当前房间状态
-  if (status !== undefined && oldOrder.room_id === newOrder.room_id && newOrder.room_id) {
-    if (status === 'confirmed' || status === 'checked_in') {
-      updateRoom(newOrder.room_id, { status: 'occupied' });
-    } else if (status === 'cancelled' || status === 'completed') {
-      const activeOrders = db.prepare(
-        `SELECT id FROM orders WHERE room_id = ? AND id != ? AND status IN ('pending', 'approved', 'confirmed', 'checked_in')`
-      ).all(newOrder.room_id, newOrder.id);
-      if (activeOrders.length === 0) {
-        updateRoom(newOrder.room_id, { status: 'available' });
+      const newOrder = getOrderById(req.params.id);
+
+      // 1. 如果房间发生变更，同步更新新旧房间的状态
+      if (oldOrder.room_id !== newOrder.room_id) {
+        // 释放旧房
+        if (oldOrder.room_id) {
+          const activeOrdersOld = db.prepare(
+            `SELECT id FROM orders WHERE room_id = ? AND id != ? AND status IN ('pending', 'approved', 'confirmed', 'checked_in')`
+          ).all(oldOrder.room_id, req.params.id);
+          if (activeOrdersOld.length === 0) {
+            updateRoom(oldOrder.room_id, { status: 'available' });
+          }
+        }
+        // 占用新房
+        if (newOrder.room_id) {
+          const targetRoomStatus = (newOrder.status === 'confirmed' || newOrder.status === 'checked_in') ? 'occupied' : 'reserved';
+          updateRoom(newOrder.room_id, { status: targetRoomStatus });
+        }
       }
-    } else if (status === 'approved' || status === 'pending') {
-      updateRoom(newOrder.room_id, { status: 'reserved' });
-    }
-  }
 
-  res.json({ code: 200, message: '更新成功' });
+      // 2. 如果仅仅是订单状态发生变更，同步更新当前房间状态
+      if (status !== undefined && oldOrder.room_id === newOrder.room_id && newOrder.room_id) {
+        if (status === 'confirmed' || status === 'checked_in') {
+          updateRoom(newOrder.room_id, { status: 'occupied' });
+        } else if (status === 'cancelled' || status === 'completed') {
+          const activeOrders = db.prepare(
+            `SELECT id FROM orders WHERE room_id = ? AND id != ? AND status IN ('pending', 'approved', 'confirmed', 'checked_in')`
+          ).all(newOrder.room_id, newOrder.id);
+          if (activeOrders.length === 0) {
+            updateRoom(newOrder.room_id, { status: 'available' });
+          }
+        } else if (status === 'approved' || status === 'pending') {
+          updateRoom(newOrder.room_id, { status: 'reserved' });
+        }
+      }
+    });
+
+    updateOrderTx();
+    res.json({ code: 200, message: '更新成功' });
+  } catch (err) {
+    console.error('更新订单事务失败:', err);
+    res.status(500).json({ code: 500, message: '更新订单失败' });
+  }
 });
 
 router.delete('/orders/:id', authMiddleware, (req, res) => {
@@ -382,28 +366,36 @@ router.post('/verify', authMiddleware, (req, res) => {
     return res.status(400).json({ code: 400, message: '该订单已核验，无需重复操作' });
   }
 
-  verifyOrder({ order_id, verified_by: req.user.id, result: result || 'success', note: note || '' });
+  try {
+    const verifyTx = db.transaction(() => {
+      verifyOrder({ order_id, verified_by: req.user.id, result: result || 'success', note: note || '' });
 
-  // 核验通过自动确认订单并将房间状态改为入住中
-  if (result === 'success' || !result) {
-    updateOrder(order_id, { status: 'confirmed' });
-    if (order.room_id) {
-      updateRoom(order.room_id, { status: 'occupied' });
-    }
+      // 核验通过自动确认订单并将房间状态改为入住中
+      if (result === 'success' || !result) {
+        updateOrder(order_id, { status: 'confirmed' });
+        if (order.room_id) {
+          updateRoom(order.room_id, { status: 'occupied' });
+        }
 
-    // 手动收取押金（如果提供了金额且 > 0）
-    if (deposit_amount && parseFloat(deposit_amount) > 0) {
-      createDeposit({
-        order_id: order.id,
-        user_id: order.user_id,
-        room_id: order.room_id || null,
-        amount: parseFloat(deposit_amount),
-        operator_id: req.user.id
-      });
-    }
+        // 手动收取押金（如果提供了金额且 > 0）
+        if (deposit_amount && parseFloat(deposit_amount) > 0) {
+          createDeposit({
+            order_id: order.id,
+            user_id: order.user_id,
+            room_id: order.room_id || null,
+            amount: parseFloat(deposit_amount),
+            operator_id: req.user.id
+          });
+        }
+      }
+    });
+
+    verifyTx();
+    res.json({ code: 200, message: '核验完成' });
+  } catch (err) {
+    console.error('核验事务失败:', err);
+    res.status(500).json({ code: 500, message: '核验操作失败' });
   }
-
-  res.json({ code: 200, message: '核验完成' });
 });
 
 router.get('/verify/:order_id', authMiddleware, (req, res) => {
@@ -434,10 +426,9 @@ router.post('/users', authMiddleware, (req, res) => {
     return res.status(409).json({ code: 409, message: '该用户名已被使用' });
   }
   const hash = bcrypt.hashSync(password, 10);
-  const result = createUser({ username, password: hash, nickname: nickname || username, phone: phone || '' });
-  if (role === 'admin') {
-    updateUserInfo(result.id, { role: 'admin' });
-  }
+  const validRoles = ['guest', 'staff', 'admin'];
+  const userRole = validRoles.includes(role) ? role : 'guest';
+  const result = createUser({ username, password: hash, nickname: nickname || username, phone: phone || '', role: userRole });
   res.json({ code: 201, message: '创建成功', data: { id: result.id } });
 });
 
@@ -723,9 +714,12 @@ router.get('/settings', authMiddleware, (req, res) => {
 });
 
 router.put('/settings', authMiddleware, (req, res) => {
-  const { booking_open, session_timeout_minutes, site_title, site_subtitle, copyright_text, registration_mode, max_tickets_per_user } = req.body;
+  const { booking_open, staff_deposit_open, session_timeout_minutes, site_title, site_subtitle, copyright_text, registration_mode, max_tickets_per_user } = req.body;
   if (booking_open !== undefined) {
     setSystemSetting('booking_open', (booking_open === '1' || booking_open === 1 || booking_open === true) ? '1' : '0');
+  }
+  if (staff_deposit_open !== undefined) {
+    setSystemSetting('staff_deposit_open', (staff_deposit_open === '1' || staff_deposit_open === 1 || staff_deposit_open === true) ? '1' : '0');
   }
   if (session_timeout_minutes !== undefined) {
     const val = parseInt(session_timeout_minutes);
@@ -979,6 +973,70 @@ router.put('/deposits/:id/forfeit', authMiddleware, (req, res) => {
   if (!remark || !remark.trim()) return res.status(400).json({ code: 400, message: '扣除押金必须填写原因' });
   forfeitDeposit(req.params.id, req.user.id, remark.trim());
   res.json({ code: 200, message: '扣除成功' });
+});
+
+// ========== STAFFS 押金管理 ==========
+
+// 获取所有 STAFF 押金列表
+router.get('/staff-deposits', authMiddleware, (req, res) => {
+  const deposits = getAllStaffDeposits();
+  res.json({ code: 200, data: deposits });
+});
+
+// 获取单个 STAFF 押金详情
+router.get('/staff-deposits/:id', authMiddleware, (req, res) => {
+  const deposit = getStaffDepositById(req.params.id);
+  if (!deposit) return res.status(404).json({ code: 404, message: '押金记录不存在' });
+  res.json({ code: 200, data: deposit });
+});
+
+// 手动收取 / 录入 STAFF 押金
+router.post('/staff-deposits', authMiddleware, (req, res) => {
+  const { user_id, amount, remark } = req.body;
+  if (!user_id) return res.status(400).json({ code: 400, message: '请选择 STAFF 用户' });
+  if (!amount || parseFloat(amount) <= 0) return res.status(400).json({ code: 400, message: '押金金额必须大于0' });
+
+  const staffUser = findUserById(user_id);
+  if (!staffUser) return res.status(404).json({ code: 404, message: '选中的用户不存在' });
+
+  createStaffDeposit({
+    user_id,
+    amount: parseFloat(amount),
+    status: 'collected',
+    remark: remark || '管理员手动收取STAFF押金',
+    operator_id: req.user.id
+  });
+
+  res.json({ code: 201, message: 'STAFF 押金录入成功' });
+});
+
+// 退还 STAFF 押金
+router.put('/staff-deposits/:id/refund', authMiddleware, (req, res) => {
+  const deposit = getStaffDepositById(req.params.id);
+  if (!deposit) return res.status(404).json({ code: 404, message: '押金记录不存在' });
+  if (deposit.status !== 'collected') return res.status(400).json({ code: 400, message: '该押金已处理，无法退还' });
+  const { remark } = req.body;
+  refundStaffDeposit(req.params.id, req.user.id, remark || '退还STAFF押金');
+  res.json({ code: 200, message: '退还成功' });
+});
+
+// 扣除 STAFF 押金
+router.put('/staff-deposits/:id/forfeit', authMiddleware, (req, res) => {
+  const deposit = getStaffDepositById(req.params.id);
+  if (!deposit) return res.status(404).json({ code: 404, message: '押金记录不存在' });
+  if (deposit.status !== 'collected') return res.status(400).json({ code: 400, message: '该押金已处理，无法扣除' });
+  const { remark } = req.body;
+  if (!remark || !remark.trim()) return res.status(400).json({ code: 400, message: '扣除押金必须填写原因' });
+  forfeitStaffDeposit(req.params.id, req.user.id, remark.trim());
+  res.json({ code: 200, message: '扣除成功' });
+});
+
+// 删除 STAFF 押金记录
+router.delete('/staff-deposits/:id', authMiddleware, (req, res) => {
+  const deposit = getStaffDepositById(req.params.id);
+  if (!deposit) return res.status(404).json({ code: 404, message: '押金记录不存在' });
+  deleteStaffDeposit(req.params.id);
+  res.json({ code: 200, message: '删除成功' });
 });
 
 module.exports = router;

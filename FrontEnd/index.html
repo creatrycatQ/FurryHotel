@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,6 +10,7 @@
   <title>FurryEvent - 登录</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
+
 <body>
 
   <!-- Logo -->
@@ -29,14 +31,7 @@
         <label for="username">用户名</label>
         <div class="input-wrapper">
           <span class="input-icon">👤</span>
-          <input
-            type="text"
-            id="username"
-            placeholder="请输入用户名"
-            autocomplete="username"
-            maxlength="20"
-            required
-          />
+          <input type="text" id="username" placeholder="请输入用户名" autocomplete="username" maxlength="20" required />
         </div>
       </div>
 
@@ -45,14 +40,8 @@
         <label for="password">密码</label>
         <div class="input-wrapper">
           <span class="input-icon">🔒</span>
-          <input
-            type="password"
-            id="password"
-            placeholder="请输入密码"
-            autocomplete="current-password"
-            maxlength="30"
-            required
-          />
+          <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password" maxlength="30"
+            required />
           <span class="toggle-pwd" id="togglePwd" title="显示密码">👁️</span>
         </div>
       </div>
@@ -80,7 +69,7 @@
     App.checkLoggedIn();
 
     // ---- 检查注册模式，关闭时隐藏注册链接 ----
-    (async function() {
+    (async function () {
       try {
         var resp = await fetch(location.origin + '/api/settings/registration-mode');
         var data = await resp.json();
@@ -88,7 +77,7 @@
           var footer = document.querySelector('.form-footer');
           if (footer) footer.style.display = 'none';
         }
-      } catch(e) {}
+      } catch (e) { }
     })();
 
     // ---- 密码显隐切换 ----
@@ -138,4 +127,5 @@
     });
   </script>
 </body>
+
 </html>

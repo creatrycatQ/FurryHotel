@@ -213,6 +213,22 @@ node database.js
 - 开发环境：日志输出到控制台
 - 生产环境：日志保存在 `RearEnd/logs/access.log`
 
+## 🌐 Cloudflare 隧道搭建与配置
+
+项目根目录下已提供一键式重新搭建工具 `重新搭建隧道.bat`。
+
+你可以通过以下两种方式搭建：
+1. **方案 A（推荐，Token 模式）**：
+   - 登录 [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/) -> **Networks** -> **Tunnels**。
+   - 新建隧道后复制生成的 **Token** (`eyJh...`)。
+   - 运行项目根目录下的 `重新搭建隧道.bat`，选择选项 `1` 并粘贴 Token。
+   - 在 Cloudflare 控制台中配置 Public Hostname，将域名指向 `http://localhost:3000`。
+2. **方案 B（CLI 交互授权模式）**：
+   - 双击运行 `重新搭建隧道.bat` 并选择选项 `2`。
+   - 脚本会自动调用 `cloudflared login` 打开浏览器授权，并自动绑定域名与更新 `config.yml`。
+
+运行 `RearEnd\启动.bat` 时将自动识别并启动 Cloudflare 隧道。
+
 ## 🔒 安全建议
 
 1. **修改默认密码**：生产环境立即修改管理员密码

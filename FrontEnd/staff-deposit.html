@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f59e0b" />
+  <title>STAFF押金 - FurryEvent</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .deposit-page { width: 100%; max-width: 440px; padding-bottom: 40px; }
+    
+    .status-card {
+      background: linear-gradient(135deg, #ffffff 0%, #fffbeb 100%);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px 20px;
+      margin-top: 16px;
+      border: 1.5px solid #fde68a;
+      text-align: center;
+      position: relative;
+    }
+
+    .badge-staff {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 12px;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #ffffff;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .amount-display {
+      font-size: 36px;
+      font-weight: 800;
+      color: #78350f;
+      margin: 8px 0;
+      font-family: -apple-system, BlinkMacSystemFont, monospace;
+    }
+
+    .status-pill {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .pill-collected { background: #d1fae5; color: #065f46; }
+    .pill-none { background: #fef3c7; color: #92400e; }
+    .pill-refunded { background: #dbeafe; color: #1e40af; }
+    .pill-forfeited { background: #fee2e2; color: #991b1b; }
+
+    .info-list {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px dashed #fcd34d;
+      text-align: left;
+      font-size: 13px;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .info-item {
+      display: flex;
+      justify-content: space-between;
+    }
+    .info-item span.val {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .history-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      margin-top: 16px;
+    }
+
+    .history-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .record-item {
+      padding: 12px;
+      border-radius: 10px;
+      background: #fafaf9;
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .record-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .pay-btn {
+      width: 100%;
+      margin-top: 16px;
+      padding: 12px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal-card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 24px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="logo-area" style="padding-top:24px;">
+    <span class="logo-icon">💰</span>
+    <h1 class="logo-title">STAFF 押金</h1>
+    <p class="logo-sub">工作人员押金查询与缴纳</p>
+  </div>
+
+  <div class="deposit-page">
+    <a class="back-link" href="home.html">← 返回首页</a>
+
+    <!-- 押金状态卡片 -->
+    <div class="status-card">
+      <span class="badge-staff">⚡ STAFF 工作人员专属</span>
+      <div style="font-size:13px;color:var(--text-secondary);">当前押金状态</div>
+      <div class="amount-display" id="dispAmount">¥0.00</div>
+      <div id="dispStatusPill" class="status-pill pill-none">未缴纳</div>
+
+      <div class="info-list">
+        <div class="info-item"><span>工作人员</span><span class="val" id="dispStaffName">--</span></div>
+        <div class="info-item"><span>手机号</span><span class="val" id="dispStaffPhone">--</span></div>
+        <div class="info-item"><span>最近更新</span><span class="val" id="dispUpdated">--</span></div>
+        <div class="info-item" id="dispRemarkRow" style="display:none;"><span>处理备注</span><span class="val" id="dispRemark" style="color:#d97706;">--</span></div>
+      </div>
+
+      <button class="btn btn-primary pay-btn" id="btnPayAction" onclick="openPayModal()" style="display:none;">
+        💳 立即缴纳 STAFF 押金 (¥200.00)
+      </button>
+    </div>
+
+    <!-- 押金历史变动记录 -->
+    <div class="history-card">
+      <div class="history-title">📜 押金记录明细</div>
+      <div id="historyContainer">
+        <p style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px 0;">暂无押金变动记录</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 缴纳押金弹窗 -->
+  <div class="modal-overlay hidden" id="payModalOverlay">
+    <div class="modal-card">
+      <h3 style="font-size:18px;margin-bottom:12px;color:var(--text)">缴纳 STAFF 押金</h3>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">活动结束后，若无违规及设备损坏，押金将原路退还。</p>
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">押金金额 (元)</label>
+        <input type="number" id="payAmountInput" value="200" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:16px;font-weight:700" readonly />
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">备注说明 (选填)</label>
+        <input type="text" id="payRemarkInput" placeholder="如：展位负责人押金" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px" />
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-primary" style="flex:1" onclick="submitPayDeposit()">确认缴纳</button>
+        <button class="btn btn-outline" style="flex:1" onclick="closePayModal()">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+    if (App.requireAuth()) {
+      async function initPage() {
+        const localUser = App.getUser();
+        if (localUser && localUser.role !== 'staff' && localUser.role !== 'admin') {
+          App.toast('权限不足，仅 STAFF 角色可访问', 'error');
+          setTimeout(() => { window.location.href = 'home.html'; }, 1000);
+          return;
+        }
+
+        loadDepositData();
+      }
+
+      let isChannelOpen = true;
+
+      async function loadDepositData() {
+        try {
+          try {
+            const stRes = await fetch('/api/settings/staff-deposit-status');
+            const stJson = await stRes.json();
+            if (stJson.code === 200 && stJson.data) {
+              isChannelOpen = stJson.data.open;
+            }
+          } catch (e) {}
+
+          const res = await api.request('GET', '/user/staff-deposit', null, true);
+          const userRes = await api.getMe();
+          const user = (userRes.code === 200) ? userRes.data : App.getUser();
+
+          document.getElementById('dispStaffName').textContent = user.nickname || user.username;
+          document.getElementById('dispStaffPhone').textContent = user.phone || '未填写';
+
+          if (res.code !== 200) {
+            App.toast(res.message || '获取押金信息失败', 'error');
+            return;
+          }
+
+          const deposits = res.data || [];
+          renderDepositView(deposits);
+        } catch (e) {
+          console.error('加载押金数据失败', e);
+        }
+      }
+
+      function updatePayButtonState(btnPay) {
+        if (!isChannelOpen) {
+          btnPay.style.display = 'block';
+          btnPay.innerHTML = '🔒 STAFF 押金缴纳通道暂未开放';
+          btnPay.style.opacity = '0.75';
+          btnPay.onclick = function () {
+            App.toast('STAFF 押金缴纳通道暂未开放，请等待管理员开启', 'info');
+          };
+        } else {
+          btnPay.style.display = 'block';
+          btnPay.innerHTML = '💳 立即缴纳 STAFF 押金 (¥200.00)';
+          btnPay.style.opacity = '1';
+          btnPay.onclick = function () {
+            window.openPayModal();
+          };
+        }
+      }
+
+      function renderDepositView(deposits) {
+        const btnPay = document.getElementById('btnPayAction');
+        const dispAmount = document.getElementById('dispAmount');
+        const dispStatusPill = document.getElementById('dispStatusPill');
+        const dispUpdated = document.getElementById('dispUpdated');
+        const dispRemarkRow = document.getElementById('dispRemarkRow');
+        const dispRemark = document.getElementById('dispRemark');
+        const historyContainer = document.getElementById('historyContainer');
+
+        const activeDeposit = deposits.find(d => d.status === 'collected');
+
+        if (activeDeposit) {
+          dispAmount.textContent = '¥' + parseFloat(activeDeposit.amount).toFixed(2);
+          dispStatusPill.className = 'status-pill pill-collected';
+          dispStatusPill.textContent = '已缴纳 (生效中)';
+          dispUpdated.textContent = activeDeposit.paid_at || '--';
+          btnPay.style.display = 'none';
+
+          if (activeDeposit.remark) {
+            dispRemarkRow.style.display = 'flex';
+            dispRemark.textContent = activeDeposit.remark;
+          } else {
+            dispRemarkRow.style.display = 'none';
+          }
+        } else if (deposits.length > 0) {
+          const latest = deposits[0];
+          dispAmount.textContent = '¥' + parseFloat(latest.amount).toFixed(2);
+          dispUpdated.textContent = latest.resolved_at || latest.paid_at || '--';
+          updatePayButtonState(btnPay);
+
+          if (latest.status === 'refunded') {
+            dispStatusPill.className = 'status-pill pill-refunded';
+            dispStatusPill.textContent = '押金已退还';
+          } else if (latest.status === 'forfeited') {
+            dispStatusPill.className = 'status-pill pill-forfeited';
+            dispStatusPill.textContent = '押金已扣除';
+          }
+
+          if (latest.remark) {
+            dispRemarkRow.style.display = 'flex';
+            dispRemark.textContent = latest.remark;
+          } else {
+            dispRemarkRow.style.display = 'none';
+          }
+        } else {
+          dispAmount.textContent = '¥0.00';
+          dispStatusPill.className = 'status-pill pill-none';
+          dispStatusPill.textContent = '未缴纳';
+          dispUpdated.textContent = '未缴纳押金';
+          dispRemarkRow.style.display = 'none';
+          updatePayButtonState(btnPay);
+        }
+
+        // 渲染历史列表
+        if (deposits.length === 0) {
+          historyContainer.innerHTML = '<p style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px 0;">暂无押金变动记录</p>';
+        } else {
+          historyContainer.innerHTML = deposits.map(d => {
+            let stText = '已缴纳';
+            let stColor = '#065f46';
+            if (d.status === 'refunded') { stText = '已退还'; stColor = '#1e40af'; }
+            if (d.status === 'forfeited') { stText = '已扣除'; stColor = '#991b1b'; }
+
+            return `
+              <div class="record-item">
+                <div class="record-header">
+                  <span>单号 #${d.id} - ${stText}</span>
+                  <span style="color:${stColor}">¥${parseFloat(d.amount).toFixed(2)}</span>
+                </div>
+                <div style="color:var(--text-secondary);font-size:12px;">缴纳时间: ${esc(d.paid_at)}</div>
+                ${d.resolved_at ? `<div style="color:var(--text-secondary);font-size:12px;">处理时间: ${esc(d.resolved_at)}</div>` : ''}
+                ${d.remark ? `<div style="color:#d97706;font-size:12px;margin-top:2px;">备注: ${esc(d.remark)}</div>` : ''}
+              </div>
+            `;
+          }).join('');
+        }
+      }
+
+      window.openPayModal = function () {
+        document.getElementById('payRemarkInput').value = '';
+        document.getElementById('payModalOverlay').classList.remove('hidden');
+      };
+
+      window.closePayModal = function () {
+        document.getElementById('payModalOverlay').classList.add('hidden');
+      };
+
+      window.submitPayDeposit = async function () {
+        const amount = document.getElementById('payAmountInput').value;
+        const remark = document.getElementById('payRemarkInput').value.trim();
+
+        try {
+          const res = await api.request('POST', '/user/staff-deposit/pay', { amount, remark }, true);
+          if (res.code === 200) {
+            App.toast('押金缴纳成功！', 'success');
+            closePayModal();
+            loadDepositData();
+          } else {
+            App.toast(res.message || '缴纳失败', 'error');
+          }
+        } catch (e) {
+          App.toast('网络请求失败', 'error');
+        }
+      };
+
+      initPage();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>STAFFS押金管理 - FurryEvent</title>
+  <link rel="stylesheet" href="css/admin.css" />
+  <style>
+    .filter-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .filter-tab {
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: #f5f5f4;
+      color: #78716c;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+    .filter-tab:hover { background: #e7e5e4; }
+    .filter-tab.active {
+      background: #f59e0b;
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+    }
+    .search-box {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .search-input {
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid #d6d3d1;
+      font-size: 13px;
+      width: 220px;
+    }
+    /* Switch toggle styling */
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #d6d3d1; transition: .3s; border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
+      background-color: white; transition: .3s; border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    input:checked + .slider { background-color: #22c55e; }
+    input:checked + .slider:before { transform: translateX(20px); }
+  </style>
+</head>
+<body data-page="staffDeposits">
+
+  <aside class="sidebar" id="sidebar">
+    <button class="sidebar-toggle" id="sidebarToggle" title="收起/展开">☰</button>
+    <div class="sidebar-header">
+      <span class="sidebar-logo">🐾</span>
+      <span class="sidebar-title">售票后台</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" data-tab="dashboard" href="admin.html">
+        <span class="nav-icon">📊</span><span class="nav-text">仪表盘</span>
+      </a>
+      <div class="nav-group">
+        <a class="nav-item nav-parent" href="javascript:;">
+          <span class="nav-icon">🎫</span><span class="nav-text">票务管理</span>
+          <span class="nav-arrow">▸</span>
+        </a>
+        <div class="nav-submenu">
+          <a class="nav-sub-item" data-tab="roomTypes" href="admin-room-types.html">票务套餐</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <a class="nav-item nav-parent" href="javascript:;">
+          <span class="nav-icon">🏨</span><span class="nav-text">酒店管理</span>
+          <span class="nav-arrow">▸</span>
+        </a>
+        <div class="nav-submenu">
+          <a class="nav-sub-item" data-tab="hotelRoomTypes" href="admin-hotel-room-types.html">客房房型</a>
+          <a class="nav-sub-item" data-tab="rooms" href="admin-rooms.html">客房房间</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <a class="nav-item nav-parent" href="javascript:;">
+          <span class="nav-icon">📇</span><span class="nav-text">客人信息</span>
+          <span class="nav-arrow">▸</span>
+        </a>
+        <div class="nav-submenu">
+          <a class="nav-sub-item" data-tab="guestDetails" href="admin-guest-details.html">客人详情</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <a class="nav-item nav-parent" href="javascript:;">
+          <span class="nav-icon">👥</span><span class="nav-text">实名管理</span>
+          <span class="nav-arrow">▸</span>
+        </a>
+        <div class="nav-submenu">
+          <a class="nav-sub-item" data-tab="guests" href="admin-guests.html">实名信息</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <a class="nav-item nav-parent" href="javascript:;">
+          <span class="nav-icon">📋</span><span class="nav-text">订单管理</span>
+          <span class="nav-arrow">▸</span>
+        </a>
+        <div class="nav-submenu">
+          <a class="nav-sub-item" data-tab="orders" href="admin-orders.html">订单列表</a>
+        </div>
+      </div>
+      <div class="nav-group open">
+        <a class="nav-item nav-parent" href="javascript:;">
+          <span class="nav-icon">💰</span><span class="nav-text">押金管理</span>
+          <span class="nav-arrow">▾</span>
+        </a>
+        <div class="nav-submenu" style="display:block;">
+          <a class="nav-sub-item" data-tab="deposit" href="admin-deposit.html">用户押金</a>
+          <a class="nav-sub-item active" data-tab="staffsDeposit" href="admin-staffs-deposit.html">STAFFS押金</a>
+        </div>
+      </div>
+
+      <a class="nav-item" data-tab="verify" href="admin-verify.html">
+        <span class="nav-icon">✅</span><span class="nav-text">在线核验</span>
+      </a>
+      <a class="nav-item" data-tab="users" href="admin-users.html">
+        <span class="nav-icon">👤</span><span class="nav-text">账号管理</span>
+      </a>
+      <a class="nav-item" data-tab="inviteCodes" href="admin-invite-codes.html">
+        <span class="nav-icon">🎟️</span><span class="nav-text">邀请码</span>
+      </a>
+      <a class="nav-item" data-tab="settings" href="admin-settings.html">
+        <span class="nav-icon">⚙️</span><span class="nav-text">系统设置</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <span id="sidebarUser">管理员</span>
+      <button class="btn-logout" id="logoutBtn">退出</button>
+    </div>
+  </aside>
+
+  <main class="main-content" id="mainContent">
+    <section class="tab-content" id="tab-staffDeposits">
+      <div class="tab-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div style="display:flex;align-items:center;gap:16px;">
+          <h1 class="page-title" style="margin:0;">💰 STAFFS 押金管理</h1>
+
+          <!-- STAFF 押金入口开关 -->
+          <div class="channel-toggle-card" style="display:flex;align-items:center;gap:8px;background:#fff8e1;padding:6px 14px;border-radius:20px;border:1px solid #ffe082;">
+            <span style="font-size:13px;font-weight:700;color:#8d6e63;">STAFF押金入口:</span>
+            <label class="switch" style="position:relative;display:inline-block;width:44px;height:24px;margin:0;">
+              <input type="checkbox" id="toggleStaffDeposit" onchange="Admin.toggleStaffDepositChannel(this.checked)">
+              <span class="slider round"></span>
+            </label>
+            <span id="staffDepositStatusText" style="font-size:12px;font-weight:700;color:#d97706;">加载中...</span>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="Admin.showAddStaffDepositModal()">+ 录入STAFF押金</button>
+      </div>
+
+      <div class="filter-tabs" id="staffDepositFilterTabs">
+        <div class="filter-tab active" data-status="all" onclick="Admin.filterStaffDeposits('all')">全部</div>
+        <div class="filter-tab" data-status="collected" onclick="Admin.filterStaffDeposits('collected')">已收取</div>
+        <div class="filter-tab" data-status="refunded" onclick="Admin.filterStaffDeposits('refunded')">已退还</div>
+        <div class="filter-tab" data-status="forfeited" onclick="Admin.filterStaffDeposits('forfeited')">已扣除</div>
+
+        <div class="search-box">
+          <input type="text" class="search-input" id="staffDepositSearchInput" placeholder="搜索 STAFF 账号/姓名/手机号..." oninput="Admin.filterStaffDeposits(currentStaffDepositFilter)" />
+        </div>
+      </div>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>STAFF 账号</th>
+            <th>姓名/昵称</th>
+            <th>手机号</th>
+            <th>金额</th>
+            <th>状态</th>
+            <th>缴纳时间</th>
+            <th>处理时间</th>
+            <th>备注说明</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="staffDepositTableBody">
+          <tr><td colspan="10" style="text-align:center;color:#888;padding:24px;">加载中...</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- 录入 STAFF 押金弹窗 -->
+  <div class="modal-overlay hidden" id="addStaffDepositModalOverlay">
+    <div class="modal-box">
+      <h3>录入 / 收取 STAFF 押金</h3>
+      <div class="form-group">
+        <label>STAFF 账号</label>
+        <select id="sdStaffId">
+          <option value="">请选择 STAFF 账号</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>押金金额 (元)</label>
+        <input type="number" id="sdAmount" value="200" min="1" step="0.01" />
+      </div>
+      <div class="form-group">
+        <label>备注说明</label>
+        <input type="text" id="sdRemark" placeholder="如：展位负责人押金 / 手动收取" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="Admin.createStaffDeposit()">确认录入</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('addStaffDepositModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 处理/退还 STAFF 押金弹窗 -->
+  <div class="modal-overlay hidden" id="staffDepositModalOverlay">
+    <div class="modal-box">
+      <h3>STAFF 押金处理</h3>
+      <div class="form-group">
+        <label>押金详情</label>
+        <span id="sdOpInfo" class="form-value"></span>
+      </div>
+      <div class="form-group">
+        <label>处理备注 / 扣减原因</label>
+        <input type="text" id="sdOpRemark" placeholder="退还无需必填；扣除押金时必须填写原因" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-success" onclick="Admin.refundStaffDeposit()">退还押金</button>
+        <button class="btn btn-danger" onclick="Admin.forfeitStaffDeposit()">扣除押金</button>
+        <button class="btn btn-outline" onclick="Admin.closeModal('staffDepositModalOverlay')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

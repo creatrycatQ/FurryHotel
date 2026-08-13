@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,6 +10,7 @@
   <title>FurryEvent - 注册</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
+
 <body>
 
   <!-- Logo -->
@@ -29,14 +31,7 @@
         <label for="username">用户名 <span style="color:var(--error)">*</span></label>
         <div class="input-wrapper">
           <span class="input-icon">👤</span>
-          <input
-            type="text"
-            id="username"
-            placeholder="3-20位字母、数字或下划线"
-            autocomplete="off"
-            maxlength="20"
-            required
-          />
+          <input type="text" id="username" placeholder="3-20位字母、数字或下划线" autocomplete="off" maxlength="20" required />
         </div>
       </div>
 
@@ -45,13 +40,7 @@
         <label for="nickname">昵称</label>
         <div class="input-wrapper">
           <span class="input-icon">🐶</span>
-          <input
-            type="text"
-            id="nickname"
-            placeholder="给自己取个好听的名字"
-            autocomplete="off"
-            maxlength="20"
-          />
+          <input type="text" id="nickname" placeholder="给自己取个好听的名字" autocomplete="off" maxlength="20" />
         </div>
       </div>
 
@@ -60,13 +49,7 @@
         <label for="phone">手机号</label>
         <div class="input-wrapper">
           <span class="input-icon">📱</span>
-          <input
-            type="tel"
-            id="phone"
-            placeholder="选填，方便后续联系"
-            autocomplete="off"
-            maxlength="11"
-          />
+          <input type="tel" id="phone" placeholder="选填，方便后续联系" autocomplete="off" maxlength="11" />
         </div>
       </div>
 
@@ -75,13 +58,7 @@
         <label for="inviteCode">邀请码 <span style="color:var(--error)">*</span></label>
         <div class="input-wrapper">
           <span class="input-icon">🎟️</span>
-          <input
-            type="text"
-            id="inviteCode"
-            placeholder="请输入邀请码"
-            autocomplete="off"
-            maxlength="32"
-          />
+          <input type="text" id="inviteCode" placeholder="请输入邀请码" autocomplete="off" maxlength="32" />
         </div>
       </div>
 
@@ -90,14 +67,8 @@
         <label for="password">密码 <span style="color:var(--error)">*</span></label>
         <div class="input-wrapper">
           <span class="input-icon">🔒</span>
-          <input
-            type="password"
-            id="password"
-            placeholder="6-30位密码"
-            autocomplete="new-password"
-            maxlength="30"
-            required
-          />
+          <input type="password" id="password" placeholder="6-30位密码" autocomplete="new-password" maxlength="30"
+            required />
           <span class="toggle-pwd" id="togglePwd" title="显示密码">👁️</span>
         </div>
       </div>
@@ -107,14 +78,8 @@
         <label for="confirmPassword">确认密码 <span style="color:var(--error)">*</span></label>
         <div class="input-wrapper">
           <span class="input-icon">🔒</span>
-          <input
-            type="password"
-            id="confirmPassword"
-            placeholder="请再次输入密码"
-            autocomplete="new-password"
-            maxlength="30"
-            required
-          />
+          <input type="password" id="confirmPassword" placeholder="请再次输入密码" autocomplete="new-password" maxlength="30"
+            required />
         </div>
       </div>
 
@@ -139,7 +104,7 @@
 
     // ---- 检查注册模式 ----
     var _regMode = 'open';
-    (async function() {
+    (async function () {
       try {
         var resp = await fetch(location.origin + '/api/settings/registration-mode');
         var data = await resp.json();
@@ -157,7 +122,7 @@
             document.getElementById('registerBtn').textContent = '提交注册申请';
           }
         }
-      } catch(e) {}
+      } catch (e) { }
     })();
 
     // ---- 密码显隐切换 ----
@@ -253,4 +218,5 @@
     });
   </script>
 </body>
+
 </html>

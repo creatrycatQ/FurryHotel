@@ -1,0 +1,8 @@
+{
+  "appId": "com.furryhotel.app",
+  "appName": "FurryHotel",
+  "webDir": "FrontEnd",
+  "server": {
+    "androidScheme": "https"
+  }
+}

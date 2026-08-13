@@ -1,7 +1,22 @@
 /**
  * API 请求封装
  */
-const API_BASE = window.location.origin + '/api';
+function getApiBase() {
+  const customUrl = localStorage.getItem('custom_api_url');
+  if (customUrl) {
+    return customUrl.endsWith('/') ? customUrl.slice(0, -1) + '/api' : customUrl + '/api';
+  }
+  const isMobileApp = window.location.protocol === 'capacitor:' || window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  if (isMobileApp && (window.location.port !== '80' && window.location.port !== '443' && window.location.port !== '')) {
+    return 'http://localhost:3000/api';
+  }
+  if (window.location.origin && window.location.origin !== 'null' && !window.location.origin.startsWith('file://')) {
+    return window.location.origin + '/api';
+  }
+  return 'http://localhost:3000/api';
+}
+
+const API_BASE = getApiBase();
 
 const api = {
   /**

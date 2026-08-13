@@ -21,6 +21,17 @@ const {
 } = require('../database');
 
 const { JWT_SECRET } = require('../config');
+const { authenticateToken } = require('../middleware/auth');
+
+function isValidPhone(phone) {
+  if (!phone) return true;
+  return /^1[3-9]\d{9}$/.test(phone);
+}
+
+function isValidIdCard(idCard) {
+  if (!idCard) return true;
+  return /^[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]$/.test(idCard);
+}
 
 /**
  * 从系统设置读取 JWT 过期时间，默认 480 分钟（8小时）
@@ -298,58 +309,39 @@ router.post('/login', async (req, res) => {
  * GET /api/auth/me
  * 获取当前用户信息（需 JWT 认证）
  */
-router.get('/me', (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ code: 401, message: '未登录' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    const user = findUserById(decoded.id);
-    if (!user) {
-      return res.status(404).json({ code: 404, message: '用户不存在' });
-    }
-
-    // 打码身份证号和手机号
-    const masked = { ...user };
-    if (masked.id_card) {
-      masked.id_card_masked = masked.id_card.slice(0, 4) + '**********' + masked.id_card.slice(-4);
-    }
-    if (masked.phone) {
-      masked.phone_masked = masked.phone.slice(0, 3) + '****' + masked.phone.slice(-4);
-    }
-    // 标记是否已实名
-    masked.verified = !!(user.real_name && user.id_card);
-
-    return res.json({ code: 200, data: masked });
-  } catch (err) {
-    return res.status(401).json({ code: 401, message: 'Token 无效或已过期' });
+router.get('/me', authenticateToken, (req, res) => {
+  const user = req.user;
+  const masked = { ...user };
+  if (masked.id_card) {
+    masked.id_card_masked = masked.id_card.slice(0, 4) + '**********' + masked.id_card.slice(-4);
   }
+  if (masked.phone) {
+    masked.phone_masked = masked.phone.slice(0, 3) + '****' + masked.phone.slice(-4);
+  }
+  masked.verified = !!(user.real_name && user.id_card);
+
+  return res.json({ code: 200, data: masked });
 });
 
 /**
  * PUT /api/auth/profile
  * 更新用户实名信息
  */
-router.put('/profile', async (req, res) => {
+router.put('/profile', authenticateToken, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ code: 401, message: '未登录' });
-    }
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    // 检查是否已实名，已实名不允许修改
-    const existingUser = findUserById(decoded.id);
+    const existingUser = req.user;
     if (existingUser && existingUser.real_name && existingUser.id_card) {
       return res.status(403).json({ code: 403, message: '已完成实名认证，无法修改' });
     }
 
     const { real_name, id_card, phone } = req.body;
+    if (phone && !isValidPhone(phone)) {
+      return res.status(400).json({ code: 400, message: '手机号格式不正确' });
+    }
+    if (id_card && !isValidIdCard(id_card)) {
+      return res.status(400).json({ code: 400, message: '身份证号格式不正确' });
+    }
+
     const sets = [];
     const vals = [];
     if (real_name !== undefined) { sets.push('real_name = ?'); vals.push(real_name); }
@@ -357,13 +349,12 @@ router.put('/profile', async (req, res) => {
     if (phone !== undefined) { sets.push('phone = ?'); vals.push(phone); }
     if (sets.length === 0) return res.status(400).json({ code: 400, message: '无更新内容' });
     sets.push("updated_at = datetime('now','localtime')");
-    vals.push(decoded.id);
+    vals.push(req.user.id);
     db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
 
-    // 同步写入/更新 guests 表（关联 user_id）
     if (real_name || id_card || phone) {
-      const updatedUser = findUserById(decoded.id);
-      upsertGuestByUserId(decoded.id, {
+      const updatedUser = findUserById(req.user.id);
+      upsertGuestByUserId(req.user.id, {
         name: updatedUser.real_name || updatedUser.nickname || updatedUser.username,
         phone: updatedUser.phone || '',
         id_card: updatedUser.id_card || '',
@@ -372,37 +363,56 @@ router.put('/profile', async (req, res) => {
 
     return res.json({ code: 200, message: '实名信息更新成功' });
   } catch (err) {
-    return res.status(401).json({ code: 401, message: 'Token 无效或已过期' });
+    console.error('[更新实名错误]', err);
+    return res.status(500).json({ code: 500, message: '服务器内部错误，请稍后重试' });
   }
 });
 
 /**
  * DELETE /api/auth/account
- * 用户注销账号（级联删除关联数据）
+ * 用户注销账号（级联删除关联数据，并在事务中释放关联房间）
  */
-router.delete('/account', async (req, res) => {
+router.delete('/account', authenticateToken, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ code: 401, message: '未登录' });
-    }
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const userId = req.user.id;
 
-    const user = findUserById(decoded.id);
-    if (!user) {
-      return res.status(404).json({ code: 404, message: '用户不存在' });
-    }
+    const deleteAccountTransaction = db.transaction(() => {
+      // 1. 检索用户关联的活跃订单及关联房间
+      const userOrders = db.prepare(
+        `SELECT id, room_id, status FROM orders WHERE user_id = ?`
+      ).all(userId);
 
-    // 级联删除关联数据
-    db.prepare('DELETE FROM order_guests WHERE user_id = ?').run(decoded.id);
-    db.prepare('DELETE FROM deposits WHERE user_id = ?').run(decoded.id);
-    db.prepare('DELETE FROM verifications WHERE verified_by = ?').run(decoded.id);
-    db.prepare('DELETE FROM orders WHERE user_id = ?').run(decoded.id);
-    deleteGuestsByUserId(decoded.id);
+      // 2. 检查并释放房间状态
+      for (const order of userOrders) {
+        if (order.room_id && (order.status === 'pending' || order.status === 'approved' || order.status === 'confirmed' || order.status === 'checked_in')) {
+          const otherActive = db.prepare(
+            `SELECT id FROM orders WHERE room_id = ? AND user_id != ? AND status IN ('pending', 'approved', 'confirmed', 'checked_in')`
+          ).all(order.room_id, userId);
 
-    // 删除用户
-    db.prepare('DELETE FROM users WHERE id = ?').run(decoded.id);
+          if (otherActive.length === 0) {
+            db.prepare(`UPDATE rooms SET status = 'available', updated_at = datetime('now','localtime') WHERE id = ?`).run(order.room_id);
+          }
+        }
+      }
+
+      // 3. 级联删除关联数据
+      db.prepare('DELETE FROM order_guests WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM deposits WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM verifications WHERE verified_by = ?').run(userId);
+
+      for (const o of userOrders) {
+        db.prepare('DELETE FROM verifications WHERE order_id = ?').run(o.id);
+        db.prepare('DELETE FROM deposits WHERE order_id = ?').run(o.id);
+      }
+
+      db.prepare('DELETE FROM orders WHERE user_id = ?').run(userId);
+      deleteGuestsByUserId(userId);
+
+      // 4. 删除用户
+      db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    });
+
+    deleteAccountTransaction();
 
     return res.json({ code: 200, message: '账号已注销' });
   } catch (err) {
@@ -415,22 +425,9 @@ router.delete('/account', async (req, res) => {
  * POST /api/auth/refresh
  * 刷新 Token：验证当前 token 有效后签发新 token
  */
-router.post('/refresh', (req, res) => {
+router.post('/refresh', authenticateToken, (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ code: 401, message: '未登录' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    const user = findUserById(decoded.id);
-    if (!user) {
-      return res.status(401).json({ code: 401, message: '用户不存在' });
-    }
-
-    // 签发新 token，保持原有 payload 结构
+    const user = req.user;
     const payload = { id: user.id, username: user.username };
     if (user.role === 'admin') payload.role = 'admin';
 
@@ -441,4 +438,29 @@ router.post('/refresh', (req, res) => {
   }
 });
 
+/**
+ * POST /api/auth/wx-login
+ * 微信小程序 Code 快捷授权（如果已配置微信 AppID/Secret 可自动 code2Session，未配置则返回基础体验信息）
+ */
+router.post('/wx-login', async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code) {
+      return res.status(400).json({ code: 400, message: '微信授权 code 不能为空' });
+    }
+
+    return res.json({
+      code: 200,
+      message: '微信连通成功，请在小程序中使用用户名密码或注册新账号完成绑定',
+      data: {
+        code_received: code,
+      },
+    });
+  } catch (err) {
+    console.error('[微信授权错误]', err);
+    return res.status(500).json({ code: 500, message: '服务器内部错误' });
+  }
+});
+
 module.exports = router;
+

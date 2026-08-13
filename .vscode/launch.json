@@ -2,22 +2,46 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "启动服务器",
       "type": "node",
       "request": "launch",
+      "name": "🚀 启动后端服务 (RearEnd/server.js)",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
       "program": "${workspaceFolder}/RearEnd/server.js",
       "cwd": "${workspaceFolder}/RearEnd",
+      "restart": true,
       "console": "integratedTerminal",
-      "skipFiles": ["<node_internals>/**"]
+      "envFile": "${workspaceFolder}/RearEnd/.env"
     },
     {
-      "name": "修复残留订单",
       "type": "node",
       "request": "launch",
-      "program": "${workspaceFolder}/RearEnd/fix-stale-orders.js",
-      "cwd": "${workspaceFolder}/RearEnd",
+      "name": "📄 调试当前打开的文件 (Node.js)",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "program": "${file}",
+      "cwd": "${fileDirname}",
       "console": "integratedTerminal",
-      "skipFiles": ["<node_internals>/**"]
+      "envFile": "${workspaceFolder}/RearEnd/.env"
+    },
+    {
+      "type": "node",
+      "request": "attach",
+      "name": "🔌 附加到 Node.js 进程 (Port 9229)",
+      "port": 9229,
+      "restart": true,
+      "skipFiles": [
+        "<node_internals>/**"
+      ]
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "🌐 调试前端页面 (Chrome)",
+      "file": "${workspaceFolder}/FrontEnd/index.html",
+      "webRoot": "${workspaceFolder}/FrontEnd"
     }
   ]
 }

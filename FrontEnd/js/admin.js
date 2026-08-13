@@ -52,6 +52,7 @@
       else if (page === 'guestDetails') loadGuestDetails();
       else if (page === 'orders') loadOrders();
       else if (page === 'deposit') loadDeposits();
+      else if (page === 'staffDeposits') loadStaffDeposits();
       else if (page === 'users') loadUsers();
       else if (page === 'inviteCodes') loadInviteCodes();
       else if (page === 'settings') loadSettings();
@@ -101,8 +102,14 @@
     document.querySelectorAll('.nav-parent').forEach(function (parent) {
       parent.addEventListener('click', function () {
         var group = this.closest('.nav-group');
-        group.classList.toggle('open')
-      })
+        var isOpen = group.classList.contains('open');
+        document.querySelectorAll('.nav-group').forEach(function (g) {
+          g.classList.remove('open');
+        });
+        if (!isOpen) {
+          group.classList.add('open');
+        }
+      });
     });
   }
 
@@ -1219,7 +1226,7 @@
     var r = await api('/users');
     var tb = document.getElementById('userTableBody');
     if (r.code !== 200) return;
-    var roleMap = { admin: '管理员', guest: '普通用户' };
+    var roleMap = { admin: '管理员', staff: 'STAFF', guest: '普通用户' };
     var statusMap = { active: '正常', pending: '待审核' };
     var pendingCount = 0;
     tb.innerHTML = r.data.map(function (u) {
@@ -1232,9 +1239,14 @@
         actions += '<button class="btn btn-sm btn-danger" onclick="Admin.rejectUser(' + u.id + ',\'' + esc(u.username) + '\')">拒绝</button> ';
       }
       actions += '<button class="btn btn-sm btn-danger" onclick="Admin.deleteUser(' + u.id + ',this)" data-username="' + esc(u.username) + '">删除</button>';
+      var roleSelect = '<select style="padding:3px 8px;border-radius:6px;border:1px solid var(--border);font-size:12px;background:var(--card-bg);color:var(--text);cursor:pointer;" onchange="Admin.changeUserRole(' + u.id + ', this.value)">' +
+        '<option value="guest"' + (u.role === 'guest' ? ' selected' : '') + '>普通用户</option>' +
+        '<option value="staff"' + (u.role === 'staff' ? ' selected' : '') + '>STAFF</option>' +
+        '<option value="admin"' + (u.role === 'admin' ? ' selected' : '') + '>管理员</option>' +
+      '</select>';
       return '<tr>' +
         '<td>' + esc(u.id) + '</td><td>' + esc(u.username) + '</td><td>' + esc(u.nickname) + '</td><td>' + esc(u.phone || '-') + '</td>' +
-        '<td>' + esc(roleMap[u.role] || u.role) + '</td><td' + statusClass + '>' + esc(statusMap[st] || st) + '</td><td>' + esc(u.created_at) + '</td>' +
+        '<td>' + roleSelect + '</td><td' + statusClass + '>' + esc(statusMap[st] || st) + '</td><td>' + esc(u.created_at) + '</td>' +
         '<td>' + actions + '</td></tr>'
     }).join('');
     // 待审核提示栏
@@ -1244,6 +1256,16 @@
       else { bar.style.display = 'none' }
     }
   }
+
+  window.Admin.changeUserRole = async function (id, newRole) {
+    var r = await api('/users/' + id, 'PUT', { role: newRole });
+    if (r.code === 200) {
+      toast('角色修改成功', 'success');
+      loadUsers();
+    } else {
+      toast(r.message || '角色修改失败', 'error');
+    }
+  };
 
   window.Admin.showPasswordModal = function (id, btn) {
     var username = btn ? btn.getAttribute('data-username') : '';
@@ -1616,6 +1638,196 @@
     var interval = sessionTimeoutMinutes * 60 * 1000 * 0.75;
     refreshTimer = setInterval(function () { if (T) refreshAdminToken() }, interval);
   }
+
+  // ===== STAFFS 押金管理 =====
+  var allStaffDepositsData = [];
+  var currentStaffDepositFilter = 'all';
+
+  async function loadStaffDeposits() {
+    loadStaffDepositChannelStatus();
+    var r = await api('/staff-deposits');
+    var tb = document.getElementById('staffDepositTableBody');
+    if (!tb) return;
+    if (r.code !== 200) { toast(r.message || '加载STAFF押金失败', 'error'); return; }
+    allStaffDepositsData = r.data || [];
+    renderFilteredStaffDeposits();
+  }
+
+  async function loadStaffDepositChannelStatus() {
+    var r = await api('/settings');
+    if (r.code === 200 && r.data) {
+      var isOpen = (r.data.staff_deposit_open === undefined || r.data.staff_deposit_open === '1');
+      var chk = document.getElementById('toggleStaffDeposit');
+      var txt = document.getElementById('staffDepositStatusText');
+      if (chk) chk.checked = isOpen;
+      if (txt) {
+        txt.textContent = isOpen ? '已开启 (可提交)' : '已关闭 (只读状态)';
+        txt.style.color = isOpen ? '#15803d' : '#dc2626';
+      }
+    }
+  }
+
+  window.Admin.toggleStaffDepositChannel = async function (isOpen) {
+    var txt = document.getElementById('staffDepositStatusText');
+    if (txt) txt.textContent = '保存中...';
+
+    var r = await api('/settings', 'PUT', { staff_deposit_open: isOpen ? '1' : '0' });
+    if (r.code === 200) {
+      toast('STAFF 押金入口已' + (isOpen ? '开启' : '关闭'), 'success');
+      loadStaffDepositChannelStatus();
+    } else {
+      toast(r.message || '设置失败', 'error');
+      loadStaffDepositChannelStatus();
+    }
+  };
+
+  function renderFilteredStaffDeposits() {
+    var tb = document.getElementById('staffDepositTableBody');
+    if (!tb) return;
+    var searchInput = document.getElementById('staffDepositSearchInput');
+    var search = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+    var list = allStaffDepositsData.filter(function (d) {
+      if (currentStaffDepositFilter !== 'all' && d.status !== currentStaffDepositFilter) return false;
+      if (search) {
+        var s1 = (d.staff_nickname || '').toLowerCase();
+        var s2 = (d.staff_username || '').toLowerCase();
+        var s3 = (d.staff_phone || '').toLowerCase();
+        return s1.includes(search) || s2.includes(search) || s3.includes(search);
+      }
+      return true;
+    });
+
+    if (list.length === 0) {
+      tb.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#888;padding:24px;">暂无 STAFF 押金记录</td></tr>';
+      return;
+    }
+
+    var stMap = { collected: '已收取', refunded: '已退还', forfeited: '已扣除' };
+    var stBadge = { collected: 'badge-success', refunded: 'badge-info', forfeited: 'badge-danger' };
+
+    tb.innerHTML = list.map(function (d) {
+      var statusText = stMap[d.status] || d.status;
+      var badgeClass = stBadge[d.status] || 'badge-secondary';
+      var actions = '';
+      if (d.status === 'collected') {
+        actions = '<button class="btn btn-sm btn-primary" onclick="Admin.showStaffDepositModal(' + d.id + ')">处理/退押</button>';
+      } else {
+        actions = '<span style="color:#999;font-size:12px;">已归档</span>';
+      }
+      actions += ' <button class="btn btn-sm btn-danger" onclick="Admin.deleteStaffDeposit(' + d.id + ')">删除</button>';
+
+      return '<tr>' +
+        '<td>#' + d.id + '</td>' +
+        '<td>' + esc(d.staff_username || '-') + '</td>' +
+        '<td>' + esc(d.staff_nickname || d.staff_username || '-') + '</td>' +
+        '<td>' + esc(d.staff_phone || '-') + '</td>' +
+        '<td><strong>¥' + parseFloat(d.amount).toFixed(2) + '</strong></td>' +
+        '<td><span class="badge ' + badgeClass + '">' + statusText + '</span></td>' +
+        '<td>' + esc(d.paid_at || '-') + '</td>' +
+        '<td>' + esc(d.resolved_at || '-') + '</td>' +
+        '<td>' + esc(d.remark || '-') + '</td>' +
+        '<td>' + actions + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  window.Admin.filterStaffDeposits = function (status) {
+    currentStaffDepositFilter = status;
+    var tabs = document.querySelectorAll('#staffDepositFilterTabs .filter-tab');
+    tabs.forEach(function (t) { t.classList.toggle('active', t.getAttribute('data-status') === status); });
+    renderFilteredStaffDeposits();
+  };
+
+  window.Admin.showAddStaffDepositModal = async function () {
+    document.getElementById('sdAmount').value = '200';
+    document.getElementById('sdRemark').value = '';
+    var userSel = document.getElementById('sdStaffId');
+    userSel.innerHTML = '<option value="">加载中...</option>';
+
+    var r = await api('/users');
+    if (r.code === 200 && r.data) {
+      var staffUsers = r.data.filter(function (u) { return u.role === 'staff' || u.role === 'admin'; });
+      if (staffUsers.length === 0) {
+        userSel.innerHTML = '<option value="">暂无 STAFF 角色账号</option>';
+      } else {
+        userSel.innerHTML = '<option value="">请选择 STAFF 账号</option>' + staffUsers.map(function (u) {
+          return '<option value="' + u.id + '">' + esc(u.nickname || u.username) + ' (@' + esc(u.username) + ' - ' + esc(u.phone || '无手机号') + ')</option>';
+        }).join('');
+      }
+    } else {
+      userSel.innerHTML = '<option value="">获取用户失败</option>';
+    }
+
+    document.getElementById('addStaffDepositModalOverlay').classList.remove('hidden');
+  };
+
+  window.Admin.createStaffDeposit = async function () {
+    var userId = document.getElementById('sdStaffId').value;
+    var amount = parseFloat(document.getElementById('sdAmount').value) || 0;
+    var remark = document.getElementById('sdRemark').value.trim();
+
+    if (!userId) return toast('请选择 STAFF 账号', 'error');
+    if (amount <= 0) return toast('押金金额必须大于 0', 'error');
+
+    var r = await api('/staff-deposits', 'POST', { user_id: parseInt(userId), amount: amount, remark: remark });
+    if (r.code === 201 || r.code === 200) {
+      Admin.closeModal('addStaffDepositModalOverlay');
+      loadStaffDeposits();
+      toast('STAFF 押金收取成功', 'success');
+    } else {
+      toast(r.message || '录入失败', 'error');
+    }
+  };
+
+  var activeStaffDepositId = null;
+  window.Admin.showStaffDepositModal = async function (id) {
+    activeStaffDepositId = id;
+    var r = await api('/staff-deposits/' + id);
+    if (r.code !== 200) return toast('获取押金详情失败', 'error');
+    var d = r.data;
+    document.getElementById('sdOpInfo').textContent = '#' + d.id + ' STAFF: ' + (d.staff_nickname || d.staff_username) + ' | 金额: ¥' + parseFloat(d.amount).toFixed(2);
+    document.getElementById('sdOpRemark').value = '';
+    document.getElementById('staffDepositModalOverlay').classList.remove('hidden');
+  };
+
+  window.Admin.refundStaffDeposit = async function () {
+    if (!activeStaffDepositId) return;
+    var remark = document.getElementById('sdOpRemark').value.trim();
+    var r = await api('/staff-deposits/' + activeStaffDepositId + '/refund', 'PUT', { remark: remark });
+    if (r.code === 200) {
+      Admin.closeModal('staffDepositModalOverlay');
+      loadStaffDeposits();
+      toast('押金已退还', 'success');
+    } else {
+      toast(r.message || '退还失败', 'error');
+    }
+  };
+
+  window.Admin.forfeitStaffDeposit = async function () {
+    if (!activeStaffDepositId) return;
+    var remark = document.getElementById('sdOpRemark').value.trim();
+    if (!remark) return toast('扣除押金必须输入原因备注', 'error');
+    var r = await api('/staff-deposits/' + activeStaffDepositId + '/forfeit', 'PUT', { remark: remark });
+    if (r.code === 200) {
+      Admin.closeModal('staffDepositModalOverlay');
+      loadStaffDeposits();
+      toast('押金已扣除', 'success');
+    } else {
+      toast(r.message || '扣除失败', 'error');
+    }
+  };
+
+  window.Admin.deleteStaffDeposit = async function (id) {
+    if (!confirm('确定要删除该 STAFF 押金记录吗？')) return;
+    var r = await api('/staff-deposits/' + id, 'DELETE');
+    if (r.code === 200) {
+      loadStaffDeposits();
+      toast('记录已删除', 'success');
+    } else {
+      toast(r.message || '删除失败', 'error');
+    }
+  };
 
   function initSessionManagement() {
     fetchSessionTimeout().then(function () {

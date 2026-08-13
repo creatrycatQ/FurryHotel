@@ -32,6 +32,7 @@ db.exec(`
     role        TEXT    NOT NULL DEFAULT 'guest',
     real_name   TEXT    NOT NULL DEFAULT '',
     id_card     TEXT    NOT NULL DEFAULT '',
+    status      TEXT    NOT NULL DEFAULT 'active',
     created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
     updated_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
   );
@@ -124,6 +125,31 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (room_id) REFERENCES rooms(id)
   );
+
+  CREATE TABLE IF NOT EXISTS staff_deposits (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    amount      REAL    NOT NULL DEFAULT 0,
+    status      TEXT    NOT NULL DEFAULT 'collected',
+    remark      TEXT    NOT NULL DEFAULT '',
+    operator_id INTEGER,
+    paid_at     TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    resolved_at TEXT,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (operator_id) REFERENCES users(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+  CREATE INDEX IF NOT EXISTS idx_orders_room_id ON orders(room_id);
+  CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+  CREATE INDEX IF NOT EXISTS idx_guests_user_id ON guests(user_id);
+  CREATE INDEX IF NOT EXISTS idx_guests_room_id ON guests(room_id);
+  CREATE INDEX IF NOT EXISTS idx_deposits_order_id ON deposits(order_id);
+  CREATE INDEX IF NOT EXISTS idx_deposits_user_id ON deposits(user_id);
+  CREATE INDEX IF NOT EXISTS idx_order_guests_order_id ON order_guests(order_id);
+  CREATE INDEX IF NOT EXISTS idx_staff_deposits_user_id ON staff_deposits(user_id);
 `);
 
 // ---------- 新增 hotel_room_types 表 ----------
@@ -328,7 +354,7 @@ function findUserByUsername(username) {
  * 根据 ID 查找用户（不含密码）
  */
 function findUserById(id) {
-  const stmt = db.prepare('SELECT id, username, nickname, phone, avatar, role, real_name, id_card, created_at, updated_at FROM users WHERE id = ?');
+  const stmt = db.prepare('SELECT id, username, nickname, phone, avatar, role, real_name, id_card, status, created_at, updated_at FROM users WHERE id = ?');
   return stmt.get(id);
 }
 
@@ -336,12 +362,12 @@ function findUserById(id) {
  * 创建新用户
  * @returns {{ id: number }} 新用户ID
  */
-function createUser({ username, password, nickname, phone }) {
+function createUser({ username, password, nickname, phone, role }) {
   const stmt = db.prepare(`
-    INSERT INTO users (username, password, nickname, phone)
-    VALUES (@username, @password, @nickname, @phone)
+    INSERT INTO users (username, password, nickname, phone, role)
+    VALUES (@username, @password, @nickname, @phone, @role)
   `);
-  const result = stmt.run({ username, password, nickname: nickname || '', phone: phone || '' });
+  const result = stmt.run({ username, password, nickname: nickname || '', phone: phone || '', role: role || 'guest' });
   return { id: result.lastInsertRowid };
 }
 
@@ -607,7 +633,7 @@ function getVerificationByOrder(order_id) {
 
 // -- 用户管理 --
 function getAllUsers() {
-  return db.prepare('SELECT id, username, nickname, phone, real_name, id_card, role, created_at, updated_at FROM users ORDER BY id').all();
+  return db.prepare('SELECT id, username, nickname, phone, real_name, id_card, role, status, created_at, updated_at FROM users ORDER BY id DESC').all();
 }
 
 function updateUserPassword(id, hashedPassword) {
@@ -789,6 +815,86 @@ function deleteDepositByOrderId(order_id) {
   return db.prepare('DELETE FROM deposits WHERE order_id = ?').run(order_id);
 }
 
+// -- STAFF 押金管理 --
+function getAllStaffDeposits() {
+  return db.prepare(`
+    SELECT sd.*,
+           u.username as staff_username, u.nickname as staff_nickname, u.phone as staff_phone,
+           op.nickname as operator_name
+    FROM staff_deposits sd
+    LEFT JOIN users u ON sd.user_id = u.id
+    LEFT JOIN users op ON sd.operator_id = op.id
+    ORDER BY sd.id DESC
+  `).all();
+}
+
+function getStaffDepositById(id) {
+  return db.prepare(`
+    SELECT sd.*,
+           u.username as staff_username, u.nickname as staff_nickname, u.phone as staff_phone,
+           op.nickname as operator_name
+    FROM staff_deposits sd
+    LEFT JOIN users u ON sd.user_id = u.id
+    LEFT JOIN users op ON sd.operator_id = op.id
+    WHERE sd.id = ?
+  `).get(id);
+}
+
+function getStaffDepositByUserId(userId) {
+  return db.prepare(`
+    SELECT sd.*,
+           u.username as staff_username, u.nickname as staff_nickname, u.phone as staff_phone,
+           op.nickname as operator_name
+    FROM staff_deposits sd
+    LEFT JOIN users u ON sd.user_id = u.id
+    LEFT JOIN users op ON sd.operator_id = op.id
+    WHERE sd.user_id = ?
+    ORDER BY sd.id DESC
+  `).all(userId);
+}
+
+function createStaffDeposit({ user_id, amount, status, remark, operator_id }) {
+  const stmt = db.prepare(`
+    INSERT INTO staff_deposits (user_id, amount, status, remark, operator_id)
+    VALUES (@user_id, @amount, @status, @remark, @operator_id)
+  `);
+  return stmt.run({
+    user_id,
+    amount: amount || 0,
+    status: status || 'collected',
+    remark: remark || '',
+    operator_id: operator_id || null,
+  });
+}
+
+function refundStaffDeposit(id, operator_id, remark) {
+  return db.prepare(`
+    UPDATE staff_deposits
+    SET status = 'refunded',
+        operator_id = ?,
+        remark = ?,
+        resolved_at = datetime('now','localtime'),
+        updated_at = datetime('now','localtime')
+    WHERE id = ?
+  `).run(operator_id, remark || '退还STAFF押金', id);
+}
+
+function forfeitStaffDeposit(id, operator_id, remark) {
+  return db.prepare(`
+    UPDATE staff_deposits
+    SET status = 'forfeited',
+        operator_id = ?,
+        remark = ?,
+        resolved_at = datetime('now','localtime'),
+        updated_at = datetime('now','localtime')
+    WHERE id = ?
+  `).run(operator_id, remark || '扣除STAFF押金', id);
+}
+
+function deleteStaffDeposit(id) {
+  return db.prepare('DELETE FROM staff_deposits WHERE id = ?').run(id);
+}
+
 // -- 系统设置 --
 function getSystemSetting(key) {
   const row = db.prepare('SELECT value FROM system_settings WHERE key = ?').get(key);
@@ -934,8 +1040,14 @@ module.exports = {
   getDepositByOrderId,
   createDeposit,
   refundDeposit,
-  forfeitDeposit,
   deleteDepositByOrderId,
+  getAllStaffDeposits,
+  getStaffDepositById,
+  getStaffDepositByUserId,
+  createStaffDeposit,
+  refundStaffDeposit,
+  forfeitStaffDeposit,
+  deleteStaffDeposit,
   getRoomTypeByName,
   getSystemSetting,
   setSystemSetting,

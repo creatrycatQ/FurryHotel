@@ -16,9 +16,18 @@ echo.
 :: ---------- Launch cloudflared tunnel ----------
 cd /d "%~dp0.."
 if exist cloudflared.exe (
-    call :log INFO "Starting cloudflared tunnel..."
-    start /b "" cloudflared.exe tunnel --config .\config.yml run --protocol http2
-    call :log INFO "Cloudflared tunnel started."
+    if exist tunnel_token.txt (
+        call :log INFO "Starting cloudflared tunnel using Token..."
+        set /p CF_TOKEN=<tunnel_token.txt
+        start /b "" cloudflared.exe tunnel run --token !CF_TOKEN!
+        call :log INFO "Cloudflared tunnel started with Token."
+    ) else if exist config.yml (
+        call :log INFO "Starting cloudflared tunnel using config.yml..."
+        start /b "" cloudflared.exe tunnel --config .\config.yml run --protocol http2
+        call :log INFO "Cloudflared tunnel started with config.yml."
+    ) else (
+        call :log WARN "Neither tunnel_token.txt nor config.yml found, skipping tunnel."
+    )
 ) else (
     call :log WARN "cloudflared.exe not found, skipping tunnel."
 )
