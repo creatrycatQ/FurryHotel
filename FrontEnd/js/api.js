@@ -6,57 +6,26 @@ function getApiBase() {
   if (customUrl) {
     return customUrl.endsWith('/') ? customUrl.slice(0, -1) + '/api' : customUrl + '/api';
   }
-  const isMobileApp = window.location.protocol === 'capacitor:' || window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  if (isMobileApp && (window.location.port !== '80' && window.location.port !== '443' && window.location.port !== '')) {
-    return 'http://localhost:3000/api';
-  }
-  if (window.location.origin && window.location.origin !== 'null' && !window.location.origin.startsWith('file://')) {
-    return window.location.origin + '/api';
-  }
-  return 'http://localhost:3000/api';
+  return 'https://furry.creatrycat.cn/api';
 }
 
 const API_BASE = getApiBase();
 
-// 全局自动为 APP / 文件模式注入右上角服务器设置悬浮按钮
-if (typeof document !== 'undefined') {
-  const initServerBadge = () => {
-    if (!document.getElementById('globalServerConfigBadge') && document.body) {
-      const badge = document.createElement('div');
-      badge.id = 'globalServerConfigBadge';
-      badge.style.cssText = 'position:fixed;top:12px;right:12px;z-index:9999;font-family:sans-serif;';
-      badge.innerHTML = `
-        <button style="background:rgba(255,255,255,0.95);border:1.5px solid #f59e0b;color:#d97706;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:bold;box-shadow:0 3px 10px rgba(0,0,0,0.15);cursor:pointer;">
-          ⚙️ 服务器设置
-        </button>
-      `;
-      badge.querySelector('button').addEventListener('click', () => {
-        const current = localStorage.getItem('custom_api_url') || '';
-        const input = prompt('请输入后端服务器地址 (例如 http://192.168.1.100:3000):', current);
-        if (input !== null) {
-          if (input.trim() === '') {
-            localStorage.removeItem('custom_api_url');
-            alert('已重置为默认服务器地址');
-          } else {
-            let url = input.trim();
-            if (!url.startsWith('http://') && !url.startsWith('https://')) {
-              url = 'http://' + url;
-            }
-            localStorage.setItem('custom_api_url', url);
-            alert('服务器地址已保存为: ' + url);
-          }
-          location.reload();
-        }
-      });
-      document.body.appendChild(badge);
+// 全局拦截 relative /api/ 请求，统一指向 API_BASE
+if (typeof window !== 'undefined' && window.fetch) {
+  const _originalFetch = window.fetch;
+  window.fetch = function (resource, options) {
+    if (typeof resource === 'string') {
+      if (resource.startsWith('/api/')) {
+        resource = API_BASE + resource.slice(4);
+      } else if (resource.startsWith(location.origin + '/api/')) {
+        resource = API_BASE + resource.slice(location.origin.length + 4);
+      }
     }
+    return _originalFetch.call(this, resource, options);
   };
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initServerBadge);
-  } else {
-    initServerBadge();
-  }
 }
+
 
 const api = {
   /**
