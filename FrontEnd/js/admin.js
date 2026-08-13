@@ -1210,9 +1210,21 @@
 
   window.Admin.closeModal = function (id) { document.getElementById(id).classList.add('hidden') };
 
-  document.getElementById('logoutBtn').addEventListener('click', function () {
-    if (confirm('\u786e\u5b9a\u8981\u9000\u51fa\u767b\u5f55\u5417\uff1f')) {
-      localStorage.removeItem('admin_token'); localStorage.removeItem('admin_user'); location.href = 'admin-login.html'
+  document.getElementById('logoutBtn')?.addEventListener('click', function () {
+    if (typeof showLogoutModal === 'function') {
+      showLogoutModal({
+        title: '退出管理后台',
+        message: '确定要退出管理后台登录吗？',
+        onConfirm: function () {
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('admin_user');
+          location.href = 'admin-login.html';
+        }
+      });
+    } else {
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_user');
+      location.href = 'admin-login.html';
     }
   });
 

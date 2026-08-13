@@ -65,13 +65,31 @@ const App = {
 
   /**
    * 退出登录
+   * @param {boolean} confirmFirst 是否展示内置确认小窗
    */
-  logout() {
-    clearTimeout(this._idleTimer);
-    clearInterval(this._refreshTimer);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    window.location.href = 'index.html';
+  logout(confirmFirst = true) {
+    if (!confirmFirst) {
+      clearTimeout(this._idleTimer);
+      clearInterval(this._refreshTimer);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = 'index.html';
+      return;
+    }
+
+    if (typeof showLogoutModal === 'function') {
+      showLogoutModal({
+        title: '退出登录',
+        message: '确定要退出当前账号吗？',
+        onConfirm: () => this.logout(false)
+      });
+    } else {
+      clearTimeout(this._idleTimer);
+      clearInterval(this._refreshTimer);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = 'index.html';
+    }
   },
 
   /**

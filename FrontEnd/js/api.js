@@ -114,3 +114,84 @@ const api = {
     return this.request('POST', '/user/checkin', { order_id: orderId }, true);
   },
 };
+
+/**
+ * 全局内置退出登录/操作确认小窗弹窗
+ */
+function showLogoutModal(options = {}) {
+  const title = options.title || '退出登录';
+  const message = options.message || '确定要退出当前账号吗？';
+  const onConfirm = options.onConfirm;
+
+  let modal = document.getElementById('customLogoutModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'customLogoutModal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 999999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.25s ease, visibility 0.25s ease;
+    `;
+    modal.innerHTML = `
+      <div id="customLogoutBox" style="background: #ffffff; color: #1c1917; border-radius: 24px; padding: 28px 24px; width: 86%; max-width: 320px; box-shadow: 0 20px 50px rgba(0,0,0,0.35); text-align: center; transform: scale(0.9); transition: transform 0.25s ease; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; border: 1px solid rgba(150,150,150,0.15);">
+        <div style="font-size: 46px; margin-bottom: 12px; line-height: 1;">🚪</div>
+        <h3 id="logoutModalTitle" style="margin: 0 0 8px 0; font-size: 19px; font-weight: 700; color: #1c1917;">${title}</h3>
+        <p id="logoutModalMessage" style="margin: 0 0 24px 0; font-size: 14px; color: #78716c; line-height: 1.5;">${message}</p>
+        <div style="display: flex; gap: 12px;">
+          <button id="cancelLogoutModalBtn" style="flex: 1; padding: 11px 0; background: #f5f5f4; color: #44403c; border: none; border-radius: 14px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s;">取消</button>
+          <button id="confirmLogoutModalBtn" style="flex: 1; padding: 11px 0; background: #ef4444; color: #ffffff; border: none; border-radius: 14px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(239,68,68,0.35); transition: transform 0.2s;">确认退出</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const closeFunc = () => {
+      modal.style.opacity = '0';
+      modal.style.visibility = 'hidden';
+      const box = document.getElementById('customLogoutBox');
+      if (box) box.style.transform = 'scale(0.9)';
+    };
+
+    document.getElementById('cancelLogoutModalBtn')?.addEventListener('click', closeFunc);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeFunc();
+    });
+  }
+
+  const titleEl = document.getElementById('logoutModalTitle');
+  const msgEl = document.getElementById('logoutModalMessage');
+  const confirmBtn = document.getElementById('confirmLogoutModalBtn');
+
+  if (titleEl) titleEl.textContent = title;
+  if (msgEl) msgEl.textContent = message;
+
+  const newConfirmBtn = confirmBtn.cloneNode(true);
+  confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+  newConfirmBtn.addEventListener('click', () => {
+    modal.style.opacity = '0';
+    modal.style.visibility = 'hidden';
+    const box = document.getElementById('customLogoutBox');
+    if (box) box.style.transform = 'scale(0.9)';
+    setTimeout(() => {
+      if (typeof onConfirm === 'function') onConfirm();
+    }, 150);
+  });
+
+  modal.style.display = 'flex';
+  requestAnimationFrame(() => {
+    modal.style.opacity = '1';
+    modal.style.visibility = 'visible';
+    const box = document.getElementById('customLogoutBox');
+    if (box) box.style.transform = 'scale(1)';
+  });
+}

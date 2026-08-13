@@ -144,10 +144,8 @@
     }
 
     // ---- 退出 ----
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-      if (confirm('确定要退出登录吗？')) {
-        App.logout();
-      }
+    document.getElementById('logoutBtn')?.addEventListener('click', () => {
+      App.logout();
     });
 
     // ---- 检查购票状态 ----
